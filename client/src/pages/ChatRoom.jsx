@@ -16,7 +16,12 @@ export default function ChatRoom({ mood, onExit }) {
   const [input, setInput] = useState('')
   const [starter, setStarter] = useState('')
   const [goodSent, setGoodSent] = useState(false)
-  const [showChat, setShowChat] = useState(true)
+
+  // Dark Room Mode states
+  const [darkRoom, setDarkRoom] = useState(true)      // starts in dark mode
+  const [countdown, setCountdown] = useState(60)       // 60 sec countdown
+  const [revealed, setRevealed] = useState(false)      // face revealed?
+  const [blur, setBlur] = useState(20)                 // blur amount
 
   const socketRef = useRef(null)
   const pcRef = useRef(null)
@@ -25,10 +30,61 @@ export default function ChatRoom({ mood, onExit }) {
   const myStreamRef = useRef(null)
   const partnerIdRef = useRef(null)
   const messagesEndRef = useRef(null)
+  const countdownRef = useRef(null)
+  const blurRef = useRef(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // ─── Dark Room Timer ───
+  function startDarkRoomTimer() {
+    setDarkRoom(true)
+    setRevealed(false)
+    setBlur(20)
+    setCountdown(60)
+
+    // Countdown
+    let timeLeft = 60
+    countdownRef.current = setInterval(() => {
+      timeLeft -= 1
+      setCountdown(timeLeft)
+      if (timeLeft <= 0) {
+        clearInterval(countdownRef.current)
+        startReveal()
+      }
+    }, 1000)
+  }
+
+  function startReveal() {
+    // Slowly reduce blur over 3 seconds
+    let currentBlur = 20
+    blurRef.current = setInterval(() => {
+      currentBlur -= 1
+      setBlur(currentBlur)
+      if (currentBlur <= 0) {
+        clearInterval(blurRef.current)
+        setDarkRoom(false)
+        setRevealed(true)
+      }
+    }, 150)
+  }
+
+  function skipDarkRoom() {
+    clearInterval(countdownRef.current)
+    clearInterval(blurRef.current)
+    setCountdown(0)
+    startReveal()
+  }
+
+  function resetDarkRoom() {
+    clearInterval(countdownRef.current)
+    clearInterval(blurRef.current)
+    setDarkRoom(true)
+    setRevealed(false)
+    setBlur(20)
+    setCountdown(60)
+  }
 
   useEffect(() => {
     let socket
@@ -60,6 +116,7 @@ export default function ChatRoom({ mood, onExit }) {
         setStatus('connected')
         setMessages([])
         setGoodSent(false)
+        startDarkRoomTimer()
         await startPC(initiator, socket, partnerId)
       })
 
@@ -90,6 +147,8 @@ export default function ChatRoom({ mood, onExit }) {
 
       socket.on('partner_left', () => {
         setStatus('partner_left')
+        clearInterval(countdownRef.current)
+        clearInterval(blurRef.current)
         pcRef.current?.close()
         if (partnerVideoRef.current) partnerVideoRef.current.srcObject = null
       })
@@ -102,6 +161,8 @@ export default function ChatRoom({ mood, onExit }) {
     init()
 
     return () => {
+      clearInterval(countdownRef.current)
+      clearInterval(blurRef.current)
       pcRef.current?.close()
       myStreamRef.current?.getTracks().forEach(t => t.stop())
       socket?.disconnect()
@@ -135,11 +196,14 @@ export default function ChatRoom({ mood, onExit }) {
   }
 
   function findNext() {
+    clearInterval(countdownRef.current)
+    clearInterval(blurRef.current)
     pcRef.current?.close()
     if (partnerVideoRef.current) partnerVideoRef.current.srcObject = null
     setStatus('waiting')
     setMessages([])
     setStarter('')
+    resetDarkRoom()
     socketRef.current.emit('find_match', { mood })
   }
 
@@ -167,16 +231,15 @@ export default function ChatRoom({ mood, onExit }) {
 
   return (
     <div style={{
-      height: '100vh', height: '-webkit-fill-available',
+      height: '100vh',
       display: 'flex', flexDirection: 'column',
-      background: '#0a0a0f', position: 'relative'
+      background: '#0a0a0f'
     }}>
       {/* Top bar */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '10px 16px',
-        background: 'rgba(0,0,0,0.5)',
-        backdropFilter: 'blur(10px)',
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)',
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10
       }}>
         <span style={{
@@ -186,41 +249,59 @@ export default function ChatRoom({ mood, onExit }) {
         }}>miloo</span>
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <span style={{
-            fontSize: '11px', color: status === 'connected' ? '#4ade80' : '#f59e0b',
-            background: status === 'connected' ? 'rgba(74,222,128,0.1)' : 'rgba(245,158,11,0.1)',
-            padding: '3px 10px', borderRadius: '20px',
-            border: `1px solid ${status === 'connected' ? 'rgba(74,222,128,0.3)' : 'rgba(245,158,11,0.3)'}`
-          }}>
-            {status === 'connected' ? '● Connected' : status === 'waiting' ? '● Searching...' : status === 'partner_left' ? '● Left' : '● ...'}
-          </span>
+          {/* Dark room indicator */}
+          {status === 'connected' && darkRoom && (
+            <span style={{
+              fontSize: '11px', color: '#a78bfa',
+              background: 'rgba(124,58,237,0.15)',
+              padding: '3px 10px', borderRadius: '20px',
+              border: '1px solid rgba(124,58,237,0.3)'
+            }}>
+              🌑 Dark Room
+            </span>
+          )}
+          {status === 'connected' && revealed && (
+            <span style={{
+              fontSize: '11px', color: '#4ade80',
+              background: 'rgba(74,222,128,0.1)',
+              padding: '3px 10px', borderRadius: '20px',
+              border: '1px solid rgba(74,222,128,0.3)'
+            }}>
+              ● Connected
+            </span>
+          )}
           <button onClick={onExit} style={{
             background: 'rgba(255,255,255,0.05)', color: '#888',
             padding: '4px 12px', borderRadius: '20px', fontSize: '12px',
-            border: '1px solid rgba(255,255,255,0.1)'
+            border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer'
           }}>Exit</button>
         </div>
       </div>
 
       {/* Video area */}
       <div style={{ flex: 1, position: 'relative', background: '#0a0a0f' }}>
-        <video ref={partnerVideoRef} autoPlay playsInline
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
 
-        {/* Overlay states */}
+        {/* Partner video with blur effect */}
+        <video ref={partnerVideoRef} autoPlay playsInline
+          style={{
+            width: '100%', height: '100%', objectFit: 'cover',
+            filter: darkRoom ? `blur(${blur}px) brightness(0.4)` : 'none',
+            transition: 'filter 0.15s ease'
+          }}
+        />
+
+        {/* Waiting overlay */}
         {(status === 'waiting' || status === 'slow_down' || status === 'partner_left' || status === 'connecting') && (
           <div style={{
             position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #0a0a0f, #12001f)',
-            gap: '20px'
+            background: 'linear-gradient(135deg, #0a0a0f, #12001f)', gap: '20px'
           }}>
             <div style={{
               width: '80px', height: '80px', borderRadius: '50%',
-              background: 'linear-gradient(135deg, rgba(124,58,237,0.3), rgba(37,99,235,0.3))',
+              background: 'rgba(124,58,237,0.2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '36px',
-              boxShadow: '0 0 40px rgba(124,58,237,0.2)'
+              fontSize: '36px', boxShadow: '0 0 40px rgba(124,58,237,0.2)'
             }}>
               {status === 'partner_left' ? '👋' : '🔍'}
             </div>
@@ -236,55 +317,119 @@ export default function ChatRoom({ mood, onExit }) {
           </div>
         )}
 
-        {/* Convo starter */}
-        {status === 'connected' && starter && (
+        {/* Dark Room Overlay — Voice only phase */}
+        {status === 'connected' && darkRoom && (
           <div style={{
-            position: 'absolute', top: '60px', left: '50%', transform: 'translateX(-50%)',
-            background: 'rgba(124,58,237,0.85)', backdropFilter: 'blur(10px)',
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            gap: '16px', zIndex: 5,
+            background: 'rgba(0,0,0,0.5)'
+          }}>
+            {/* Animated sound waves */}
+            <div style={{ position: 'relative', width: '80px', height: '80px' }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{
+                  position: 'absolute', inset: 0, borderRadius: '50%',
+                  border: '2px solid rgba(124,58,237,0.4)',
+                  animation: `ping ${1 + i * 0.3}s ease-out infinite`,
+                  animationDelay: `${i * 0.2}s`
+                }} />
+              ))}
+              <div style={{
+                position: 'absolute', inset: '20px', borderRadius: '50%',
+                background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '20px'
+              }}>🎤</div>
+            </div>
+
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ color: '#fff', fontSize: '16px', fontWeight: '700' }}>
+                🌑 Dark Room Mode
+              </p>
+              <p style={{ color: '#888', fontSize: '13px', marginTop: '4px' }}>
+                Pehle baat karo, phir face dekhna
+              </p>
+            </div>
+
+            {/* Countdown ring */}
+            <div style={{
+              background: 'rgba(124,58,237,0.15)',
+              border: '1px solid rgba(124,58,237,0.3)',
+              borderRadius: '50px', padding: '8px 24px',
+              textAlign: 'center'
+            }}>
+              <span style={{ color: '#a78bfa', fontSize: '13px', fontWeight: '600' }}>
+                {countdown > 0 ? `${countdown}s mein face reveal hoga ✨` : 'Revealing...'}
+              </span>
+            </div>
+
+            <button onClick={skipDarkRoom} style={{
+              background: 'none', color: '#555', fontSize: '12px',
+              textDecoration: 'underline', cursor: 'pointer', border: 'none'
+            }}>
+              Skip karo — abhi dekhna hai
+            </button>
+          </div>
+        )}
+
+        {/* Face reveal animation */}
+        {status === 'connected' && revealed && (
+          <div style={{
+            position: 'absolute', top: '60px', left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(124,58,237,0.85)',
+            backdropFilter: 'blur(10px)',
             padding: '8px 18px', borderRadius: '50px',
             fontSize: '13px', fontWeight: '600', color: '#fff',
-            whiteSpace: 'nowrap', maxWidth: '90vw', overflow: 'hidden', textOverflow: 'ellipsis'
+            animation: 'fadeOut 3s forwards'
+          }}>
+            ✨ Face reveal! Namaste!
+          </div>
+        )}
+
+        {/* Convo starter */}
+        {status === 'connected' && !darkRoom && starter && (
+          <div style={{
+            position: 'absolute', top: '60px', left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)',
+            padding: '8px 18px', borderRadius: '50px',
+            fontSize: '13px', fontWeight: '600', color: '#fff',
+            whiteSpace: 'nowrap', maxWidth: '90vw',
+            overflow: 'hidden', textOverflow: 'ellipsis'
           }}>
             {starter}
           </div>
         )}
 
-        {/* My video */}
+        {/* My video — also blurred in dark room */}
         <video ref={myVideoRef} autoPlay muted playsInline style={{
           position: 'absolute', bottom: '16px', right: '12px',
           width: '90px', height: '120px', objectFit: 'cover',
-          borderRadius: '12px', border: '2px solid rgba(124,58,237,0.6)',
+          borderRadius: '12px',
+          border: '2px solid rgba(124,58,237,0.6)',
+          filter: darkRoom ? 'blur(8px) brightness(0.5)' : 'none',
+          transition: 'filter 0.3s ease',
           boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
         }} />
       </div>
 
-      {/* Chat toggle button (mobile) */}
-      <button onClick={() => setShowChat(!showChat)} style={{
-        position: 'absolute', bottom: showChat ? '285px' : '16px', right: '12px',
-        background: 'rgba(124,58,237,0.8)', backdropFilter: 'blur(10px)',
-        color: '#fff', width: '36px', height: '36px', borderRadius: '50%',
-        fontSize: '16px', zIndex: 20, transition: 'bottom 0.3s',
-        display: 'none'
-      }} id="chat-toggle">💬</button>
-
-      {/* Bottom chat panel */}
+      {/* Bottom panel */}
       <div style={{
-        height: showChat ? '260px' : '60px',
         display: 'flex', flexDirection: 'column',
-        background: 'rgba(10,10,15,0.95)', backdropFilter: 'blur(20px)',
-        borderTop: '1px solid rgba(255,255,255,0.06)',
-        transition: 'height 0.3s ease'
+        background: 'rgba(10,10,15,0.97)',
+        backdropFilter: 'blur(20px)',
+        borderTop: '1px solid rgba(255,255,255,0.06)'
       }}>
         {/* Action bar */}
         <div style={{
           display: 'flex', gap: '6px', padding: '8px 12px',
           justifyContent: 'space-between', alignItems: 'center',
-          borderBottom: '1px solid rgba(255,255,255,0.05)'
         }}>
           <div style={{ display: 'flex', gap: '6px' }}>
-            <ActionBtn onClick={() => socketRef.current?.emit('report_user')} color="#f87171">
-              🚩
-            </ActionBtn>
+            <ActionBtn onClick={() => socketRef.current?.emit('report_user')} color="#f87171">🚩</ActionBtn>
             <ActionBtn
               onClick={() => { socketRef.current?.emit('good_convo'); setGoodSent(true) }}
               color={goodSent ? '#4ade80' : '#888'}
@@ -293,54 +438,58 @@ export default function ChatRoom({ mood, onExit }) {
               {goodSent ? '✅' : '👍'}
             </ActionBtn>
           </div>
-
-          <Btn onClick={findNext} style={{ padding: '7px 20px', fontSize: '13px' }}>
-            ⏭ Next
-          </Btn>
+          <Btn onClick={findNext} style={{ padding: '7px 20px', fontSize: '13px' }}>⏭ Next</Btn>
         </div>
 
-        {showChat && (
-          <>
-            {/* Messages */}
-            <div style={{
-              flex: 1, overflowY: 'auto', padding: '8px 12px',
-              display: 'flex', flexDirection: 'column', gap: '5px'
-            }}>
-              {messages.length === 0 && status === 'connected' && (
-                <p style={{ color: '#333', fontSize: '12px', textAlign: 'center', marginTop: '8px' }}>
-                  Conversation shuru karo! 👋
-                </p>
-              )}
-              {messages.map((m, i) => (
-                <div key={i} style={{
-                  alignSelf: m.from === 'me' ? 'flex-end' : m.from === 'system' ? 'center' : 'flex-start',
-                  background: m.from === 'me' ? 'linear-gradient(90deg,#7c3aed,#2563eb)' : m.from === 'system' ? 'transparent' : 'rgba(255,255,255,0.07)',
-                  color: m.from === 'system' ? '#555' : '#fff',
-                  padding: m.from === 'system' ? '2px 0' : '7px 12px',
-                  borderRadius: '14px', fontSize: '13px', maxWidth: '75%'
-                }}>{m.text}</div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
+        {/* Messages */}
+        <div style={{
+          height: '120px', overflowY: 'auto',
+          padding: '4px 12px', display: 'flex',
+          flexDirection: 'column', gap: '4px'
+        }}>
+          {messages.length === 0 && status === 'connected' && (
+            <p style={{ color: '#333', fontSize: '12px', textAlign: 'center', marginTop: '8px' }}>
+              {darkRoom ? '🌑 Voice se baat karo pehle...' : 'Conversation shuru karo! 👋'}
+            </p>
+          )}
+          {messages.map((m, i) => (
+            <div key={i} style={{
+              alignSelf: m.from === 'me' ? 'flex-end' : m.from === 'system' ? 'center' : 'flex-start',
+              background: m.from === 'me' ? 'linear-gradient(90deg,#7c3aed,#2563eb)' : m.from === 'system' ? 'transparent' : 'rgba(255,255,255,0.07)',
+              color: m.from === 'system' ? '#555' : '#fff',
+              padding: m.from === 'system' ? '2px 0' : '6px 12px',
+              borderRadius: '14px', fontSize: '13px', maxWidth: '75%'
+            }}>{m.text}</div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
 
-            {/* Input */}
-            <div style={{
-              display: 'flex', gap: '8px', padding: '8px 12px 12px'
-            }}>
-              <input value={input} onChange={e => setInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && sendMessage()}
-                placeholder="Message likhو..."
-                style={{
-                  flex: 1, background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: '50px', padding: '9px 16px',
-                  color: '#fff', fontSize: '14px', outline: 'none'
-                }} />
-              <Btn onClick={sendMessage} style={{ padding: '9px 16px', fontSize: '13px' }}>↑</Btn>
-            </div>
-          </>
-        )}
+        {/* Input */}
+        <div style={{ display: 'flex', gap: '8px', padding: '8px 12px 16px' }}>
+          <input value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && sendMessage()}
+            placeholder={darkRoom ? "🌑 Voice mode..." : "Message likho..."}
+            style={{
+              flex: 1, background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '50px', padding: '9px 16px',
+              color: '#fff', fontSize: '14px', outline: 'none'
+            }} />
+          <Btn onClick={sendMessage} style={{ padding: '9px 16px', fontSize: '13px' }}>↑</Btn>
+        </div>
       </div>
+
+      <style>{`
+        @keyframes ping {
+          0% { transform: scale(1); opacity: 1; }
+          100% { transform: scale(2); opacity: 0; }
+        }
+        @keyframes fadeOut {
+          0% { opacity: 1; }
+          70% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
     </div>
   )
 }
