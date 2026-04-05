@@ -13,6 +13,15 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+// ─── Self-ping (Render free tier ko jaaga rakho) ───
+const SELF_URL = 'https://rcapp-server.onrender.com';
+setInterval(() => {
+  fetch(SELF_URL)
+    .then(() => console.log('Self-ping ✅'))
+    .catch(() => console.log('Self-ping failed'));
+}, 14 * 60 * 1000); // har 14 minute mein
+
+// ─── In-memory storage ───
 const waitingQueues = { vent: [], laugh: [], music: [], deep: [], gaming: [], culture: [], any: [] };
 const activePairs = new Map();
 const trustScores = new Map();
@@ -20,6 +29,24 @@ const reportCount = new Map();
 const bannedFingerprints = new Set();
 const ipJoinCount = new Map();
 const recentSkips = new Map();
+
+// ─── Auto cleanup (memory leak rokne ke liye) ───
+setInterval(() => {
+  const now = Date.now();
+  // Purane IP counts saaf karo
+  for (const [ip, data] of ipJoinCount.entries()) {
+    if (now - data.lastReset > 30 * 60 * 1000) ipJoinCount.delete(ip);
+  }
+  // Purane skip records saaf karo
+  for (const [id, skips] of recentSkips.entries()) {
+    const recent = skips.filter(t => now - t < 60 * 1000);
+    if (recent.length === 0) recentSkips.delete(id);
+    else recentSkips.set(id, recent);
+  }
+  // Banned list agar bahut badi ho jaaye toh purani entries hata do
+  if (bannedFingerprints.size > 10000) bannedFingerprints.clear();
+  console.log(`Cleanup done. Active pairs: ${activePairs.size / 2}, Banned: ${bannedFingerprints.size}`);
+}, 30 * 60 * 1000); // har 30 min mein
 
 function isRateLimited(ip) {
   const now = Date.now();
@@ -100,7 +127,6 @@ io.on("connection", (socket) => {
       const roomId = `${socket.id}-${partner}`;
       io.to(socket.id).emit("match_found", { partnerId: partner, initiator: true, roomId, starter });
       io.to(partner).emit("match_found", { partnerId: socket.id, initiator: false, roomId, starter });
-      console.log(`Matched: ${socket.id} ↔ ${partner}`);
     } else {
       waitingQueues[selectedMood].push(socket.id);
       socket.emit("waiting");
@@ -148,6 +174,6 @@ io.on("connection", (socket) => {
   });
 });
 
-app.get("/", (req, res) => { res.json({ status: "Server running ✅" }); });
+app.get("/", (req, res) => { res.json({ status: "Server running ✅", active: activePairs.size / 2 }); });
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => { console.log(`Server running on port ${PORT} ✅`); });
