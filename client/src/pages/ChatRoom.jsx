@@ -9,7 +9,7 @@ const iceConfig = {
   ]
 }
 
-export default function ChatRoom({ mood, onExit }) {
+export default function ChatRoom({ mood, safeMode, onExit }) {
   const [status, setStatus] = useState('connecting')
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -22,6 +22,7 @@ export default function ChatRoom({ mood, onExit }) {
   const [muted, setMuted] = useState(false)
   const [camOff, setCamOff] = useState(false)
   const [showWelcome, setShowWelcome] = useState(false)
+  const [myBlur, setMyBlur] = useState(safeMode) // Safe mode — my face blurred
 
   const socketRef = useRef(null)
   const pcRef = useRef(null)
@@ -43,7 +44,7 @@ export default function ChatRoom({ mood, onExit }) {
     setBlur(20)
     setCountdown(60)
     setShowWelcome(true)
-    setTimeout(() => setShowWelcome(false), 3000)
+    setTimeout(() => setShowWelcome(false), 3500)
 
     let timeLeft = 60
     countdownRef.current = setInterval(() => {
@@ -85,36 +86,29 @@ export default function ChatRoom({ mood, onExit }) {
     setBlur(20)
     setCountdown(60)
     setShowWelcome(false)
+    setMyBlur(safeMode)
   }
 
   function toggleMute() {
     const track = myStreamRef.current?.getAudioTracks()[0]
-    if (track) {
-      track.enabled = !track.enabled
-      setMuted(!track.enabled)
-    }
+    if (track) { track.enabled = !track.enabled; setMuted(!track.enabled) }
   }
 
   function toggleCam() {
     const track = myStreamRef.current?.getVideoTracks()[0]
-    if (track) {
-      track.enabled = !track.enabled
-      setCamOff(!track.enabled)
-    }
+    if (track) { track.enabled = !track.enabled; setCamOff(!track.enabled) }
   }
+
+  function toggleMyBlur() { setMyBlur(!myBlur) }
 
   useEffect(() => {
     let socket
-
     const init = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         myStreamRef.current = stream
         if (myVideoRef.current) myVideoRef.current.srcObject = stream
-      } catch {
-        setStatus('cam_error')
-        return
-      }
+      } catch { setStatus('cam_error'); return }
 
       socket = io(SERVER, { auth: { fingerprint: 'fp_' + Math.random().toString(36).substr(2, 9) } })
       socketRef.current = socket
@@ -176,7 +170,6 @@ export default function ChatRoom({ mood, onExit }) {
     }
 
     init()
-
     return () => {
       clearInterval(countdownRef.current)
       clearInterval(blurRef.current)
@@ -228,8 +221,8 @@ export default function ChatRoom({ mood, onExit }) {
     <Center>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: '48px' }}>📷</div>
-        <h3 style={{ marginTop: '16px', color: '#fff' }}>Camera access do</h3>
-        <p style={{ color: '#666', marginTop: '8px', fontSize: '14px' }}>Browser settings mein camera allow karo</p>
+        <h3 style={{ color: '#fff', marginTop: '16px' }}>Camera access do</h3>
+        <p style={{ color: '#666', marginTop: '8px', fontSize: '14px' }}>Browser mein camera allow karo</p>
         <Btn onClick={onExit} style={{ marginTop: '24px' }}>Wapas Jao</Btn>
       </div>
     </Center>
@@ -239,7 +232,7 @@ export default function ChatRoom({ mood, onExit }) {
     <Center>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: '48px' }}>🔌</div>
-        <h3 style={{ marginTop: '16px', color: '#fff' }}>Server thoda busy hai</h3>
+        <h3 style={{ color: '#fff', marginTop: '16px' }}>Server thoda busy hai</h3>
         <p style={{ color: '#666', marginTop: '8px', fontSize: '14px' }}>Thodi der mein try karo</p>
         <Btn onClick={onExit} style={{ marginTop: '24px' }}>Wapas Jao</Btn>
       </div>
@@ -256,11 +249,21 @@ export default function ChatRoom({ mood, onExit }) {
         backdropFilter: 'blur(10px)', position: 'absolute',
         top: 0, left: 0, right: 0, zIndex: 20
       }}>
-        <span style={{
-          fontSize: '18px', fontWeight: '900',
-          background: 'linear-gradient(90deg, #a78bfa, #60a5fa)',
-          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
-        }}>miloo</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{
+            fontSize: '18px', fontWeight: '900',
+            background: 'linear-gradient(90deg, #a78bfa, #60a5fa)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
+          }}>miloo</span>
+          {safeMode && (
+            <span style={{
+              fontSize: '10px', color: '#a78bfa',
+              background: 'rgba(167,139,250,0.15)',
+              padding: '2px 8px', borderRadius: '20px',
+              border: '1px solid rgba(167,139,250,0.3)'
+            }}>🛡️ Safe</span>
+          )}
+        </div>
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {status === 'connected' && (
@@ -271,7 +274,7 @@ export default function ChatRoom({ mood, onExit }) {
               padding: '3px 10px', borderRadius: '20px',
               border: `1px solid ${darkRoom ? 'rgba(124,58,237,0.3)' : 'rgba(74,222,128,0.3)'}`
             }}>
-              {darkRoom ? `🌑 Dark Room • ${countdown}s` : '● Live'}
+              {darkRoom ? `🌑 ${countdown}s` : '● Live'}
             </span>
           )}
           <button onClick={onExit} style={{
@@ -282,7 +285,7 @@ export default function ChatRoom({ mood, onExit }) {
         </div>
       </div>
 
-      {/* Video */}
+      {/* Video area */}
       <div style={{ flex: 1, position: 'relative', background: '#0a0a0f' }}>
         <video ref={partnerVideoRef} autoPlay playsInline style={{
           width: '100%', height: '100%', objectFit: 'cover',
@@ -290,33 +293,36 @@ export default function ChatRoom({ mood, onExit }) {
           transition: 'filter 0.15s ease'
         }} />
 
-        {/* Welcome card — clearly explains Dark Room */}
+        {/* Welcome card */}
         {showWelcome && (
           <div style={{
             position: 'absolute', inset: 0, zIndex: 15,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)'
+            background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(20px)'
           }}>
             <div style={{
-              background: 'linear-gradient(135deg, rgba(124,58,237,0.3), rgba(37,99,235,0.3))',
-              border: '1px solid rgba(124,58,237,0.4)',
-              borderRadius: '24px', padding: '32px', textAlign: 'center',
-              maxWidth: '300px'
+              background: 'linear-gradient(135deg, rgba(124,58,237,0.2), rgba(37,99,235,0.2))',
+              border: '1px solid rgba(124,58,237,0.3)',
+              borderRadius: '24px', padding: '32px', textAlign: 'center', maxWidth: '300px'
             }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌑</div>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>
+                {safeMode ? '🛡️' : '🌑'}
+              </div>
               <h3 style={{ color: '#fff', fontSize: '20px', fontWeight: '800', marginBottom: '8px' }}>
-                Dark Room Mode
+                {safeMode ? 'Safe Mode ON! 🛡️' : 'Dark Room Mode'}
               </h3>
               <p style={{ color: '#aaa', fontSize: '14px', lineHeight: 1.6 }}>
-                Ye intentional hai! Pehle <strong style={{ color: '#a78bfa' }}>sirf voice</strong> se baat karo.<br />
-                60 seconds baad <strong style={{ color: '#60a5fa' }}>face reveal</strong> hoga. ✨
+                {safeMode
+                  ? 'Tumhara face <strong style="color:#a78bfa">hidden hai</strong>. Jab ready ho, neeche <strong style="color:#60a5fa">Reveal button</strong> dabao.'
+                  : 'Ye intentional hai! Pehle <strong style="color:#a78bfa">sirf voice</strong> se baat karo. 60s baad face reveal hoga. ✨'
+                }
               </p>
               <div style={{
                 marginTop: '16px', padding: '8px 16px',
-                background: 'rgba(124,58,237,0.2)', borderRadius: '50px',
-                color: '#a78bfa', fontSize: '13px'
+                background: 'rgba(124,58,237,0.15)', borderRadius: '50px',
+                color: '#a78bfa', fontSize: '12px'
               }}>
-                Network issue nahi hai — ye feature hai! 😊
+                Network issue nahi — ye feature hai! 😊
               </div>
             </div>
           </div>
@@ -333,7 +339,7 @@ export default function ChatRoom({ mood, onExit }) {
               width: '80px', height: '80px', borderRadius: '50%',
               background: 'rgba(124,58,237,0.2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '36px', boxShadow: '0 0 40px rgba(124,58,237,0.2)'
+              fontSize: '36px'
             }}>
               {status === 'partner_left' ? '👋' : '🔍'}
             </div>
@@ -354,14 +360,13 @@ export default function ChatRoom({ mood, onExit }) {
           <div style={{
             position: 'absolute', inset: 0, zIndex: 5,
             display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center', gap: '20px'
+            alignItems: 'center', justifyContent: 'center', gap: '16px'
           }}>
-            {/* Pulse rings */}
             <div style={{ position: 'relative', width: '90px', height: '90px' }}>
               {[0, 1, 2].map(i => (
                 <div key={i} style={{
                   position: 'absolute', inset: 0, borderRadius: '50%',
-                  border: '2px solid rgba(124,58,237,0.5)',
+                  border: '2px solid rgba(124,58,237,0.4)',
                   animation: `pulse ${1.2 + i * 0.4}s ease-out infinite`,
                   animationDelay: `${i * 0.3}s`
                 }} />
@@ -369,28 +374,23 @@ export default function ChatRoom({ mood, onExit }) {
               <div style={{
                 position: 'absolute', inset: '18px', borderRadius: '50%',
                 background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '22px'
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px'
               }}>🎤</div>
             </div>
-
             <div style={{ textAlign: 'center' }}>
               <p style={{ color: '#fff', fontSize: '15px', fontWeight: '700' }}>
                 Sirf voice — Face {countdown}s mein reveal hoga
               </p>
-              <p style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
+              <p style={{ color: '#555', fontSize: '12px', marginTop: '4px' }}>
                 Pehle baat karo, phir dekhna 👀
               </p>
             </div>
-
             <button onClick={skipDarkRoom} style={{
               background: 'rgba(255,255,255,0.05)',
               border: '1px solid rgba(255,255,255,0.1)',
-              color: '#666', fontSize: '12px', padding: '6px 16px',
+              color: '#555', fontSize: '12px', padding: '6px 16px',
               borderRadius: '20px', cursor: 'pointer'
-            }}>
-              Abhi reveal karo →
-            </button>
+            }}>Abhi reveal karo →</button>
           </div>
         )}
 
@@ -404,24 +404,18 @@ export default function ChatRoom({ mood, onExit }) {
             fontSize: '14px', fontWeight: '700', color: '#fff',
             boxShadow: '0 4px 20px rgba(124,58,237,0.4)',
             animation: 'fadeOut 3s forwards'
-          }}>
-            ✨ Face reveal! Namaste!
-          </div>
+          }}>✨ Face reveal! Namaste!</div>
         )}
 
         {/* Convo starter */}
         {status === 'connected' && !darkRoom && starter && !revealed && (
           <div style={{
-            position: 'absolute', top: '60px', left: '50%',
-            transform: 'translateX(-50%)',
+            position: 'absolute', top: '60px', left: '50%', transform: 'translateX(-50%)',
             background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)',
             padding: '8px 18px', borderRadius: '50px',
             fontSize: '13px', fontWeight: '600', color: '#fff',
-            whiteSpace: 'nowrap', maxWidth: '90vw',
-            overflow: 'hidden', textOverflow: 'ellipsis'
-          }}>
-            {starter}
-          </div>
+            whiteSpace: 'nowrap', maxWidth: '90vw', overflow: 'hidden', textOverflow: 'ellipsis'
+          }}>{starter}</div>
         )}
 
         {/* My video */}
@@ -429,27 +423,29 @@ export default function ChatRoom({ mood, onExit }) {
           position: 'absolute', bottom: '16px', right: '12px',
           width: '90px', height: '120px', objectFit: 'cover',
           borderRadius: '12px',
-          border: `2px solid ${camOff ? 'rgba(239,68,68,0.6)' : 'rgba(124,58,237,0.6)'}`,
-          filter: darkRoom ? 'blur(8px) brightness(0.4)' : camOff ? 'brightness(0.2)' : 'none',
-          transition: 'all 0.3s ease',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+          border: `2px solid ${safeMode && myBlur ? 'rgba(167,139,250,0.6)' : camOff ? 'rgba(239,68,68,0.6)' : 'rgba(124,58,237,0.6)'}`,
+          filter: (darkRoom || myBlur) ? 'blur(10px) brightness(0.4)' : camOff ? 'brightness(0.2)' : 'none',
+          transition: 'all 0.3s ease', boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
         }} />
 
-        {/* Cam off indicator */}
-        {camOff && (
-          <div style={{
-            position: 'absolute', bottom: '72px', right: '12px',
-            background: 'rgba(239,68,68,0.8)', borderRadius: '50px',
-            padding: '2px 8px', fontSize: '10px', color: '#fff', zIndex: 10
-          }}>cam off</div>
+        {/* Safe mode reveal button on my video */}
+        {safeMode && !darkRoom && (
+          <button onClick={toggleMyBlur} style={{
+            position: 'absolute', bottom: '8px', right: '8px',
+            background: myBlur ? 'rgba(167,139,250,0.9)' : 'rgba(74,222,128,0.9)',
+            color: '#fff', border: 'none', borderRadius: '50px',
+            fontSize: '10px', fontWeight: '700', padding: '4px 10px',
+            cursor: 'pointer', zIndex: 10
+          }}>
+            {myBlur ? '👁 Reveal' : '🛡 Hide'}
+          </button>
         )}
       </div>
 
       {/* Bottom panel */}
       <div style={{
         display: 'flex', flexDirection: 'column',
-        background: 'rgba(10,10,15,0.97)',
-        backdropFilter: 'blur(20px)',
+        background: 'rgba(10,10,15,0.97)', backdropFilter: 'blur(20px)',
         borderTop: '1px solid rgba(255,255,255,0.06)'
       }}>
         {/* Controls */}
@@ -458,23 +454,13 @@ export default function ChatRoom({ mood, onExit }) {
           justifyContent: 'space-between', alignItems: 'center'
         }}>
           <div style={{ display: 'flex', gap: '6px' }}>
-            {/* Mute */}
-            <ActionBtn onClick={toggleMute}
-              color={muted ? '#f87171' : '#888'}
-              bg={muted ? 'rgba(239,68,68,0.15)' : undefined}>
+            <ActionBtn onClick={toggleMute} color={muted ? '#f87171' : '#888'} bg={muted ? 'rgba(239,68,68,0.15)' : undefined}>
               {muted ? '🔇' : '🎤'}
             </ActionBtn>
-            {/* Cam */}
-            <ActionBtn onClick={toggleCam}
-              color={camOff ? '#f87171' : '#888'}
-              bg={camOff ? 'rgba(239,68,68,0.15)' : undefined}>
+            <ActionBtn onClick={toggleCam} color={camOff ? '#f87171' : '#888'} bg={camOff ? 'rgba(239,68,68,0.15)' : undefined}>
               {camOff ? '📵' : '📹'}
             </ActionBtn>
-            {/* Report */}
-            <ActionBtn onClick={() => socketRef.current?.emit('report_user')} color="#f87171">
-              🚩
-            </ActionBtn>
-            {/* Good */}
+            <ActionBtn onClick={() => socketRef.current?.emit('report_user')} color="#f87171">🚩</ActionBtn>
             <ActionBtn
               onClick={() => { socketRef.current?.emit('good_convo'); setGoodSent(true) }}
               color={goodSent ? '#4ade80' : '#888'}
@@ -487,9 +473,8 @@ export default function ChatRoom({ mood, onExit }) {
 
         {/* Messages */}
         <div style={{
-          height: '100px', overflowY: 'auto',
-          padding: '4px 12px', display: 'flex',
-          flexDirection: 'column', gap: '4px'
+          height: '100px', overflowY: 'auto', padding: '4px 12px',
+          display: 'flex', flexDirection: 'column', gap: '4px'
         }}>
           {messages.length === 0 && status === 'connected' && (
             <p style={{ color: '#333', fontSize: '12px', textAlign: 'center', marginTop: '8px' }}>
@@ -512,7 +497,7 @@ export default function ChatRoom({ mood, onExit }) {
         <div style={{ display: 'flex', gap: '8px', padding: '8px 12px 16px' }}>
           <input value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && sendMessage()}
-            placeholder={darkRoom ? '🌑 Voice mode mein ho...' : 'Message likho...'}
+            placeholder={darkRoom ? '🌑 Voice mode...' : safeMode && myBlur ? '🛡️ Safe mode — type karo' : 'Message likho...'}
             style={{
               flex: 1, background: 'rgba(255,255,255,0.05)',
               border: '1px solid rgba(255,255,255,0.08)',
@@ -539,21 +524,15 @@ export default function ChatRoom({ mood, onExit }) {
 }
 
 function Center({ children }) {
-  return (
-    <div style={{
-      height: '100vh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', background: '#0a0a0f'
-    }}>{children}</div>
-  )
+  return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a0f' }}>{children}</div>
 }
 
 function Btn({ children, onClick, style = {}, disabled = false }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
-      background: 'linear-gradient(90deg, #7c3aed, #2563eb)',
-      color: '#fff', padding: '10px 20px', borderRadius: '50px',
-      fontSize: '14px', fontWeight: '600',
-      opacity: disabled ? 0.5 : 1, border: 'none', cursor: 'pointer', ...style
+      background: 'linear-gradient(90deg, #7c3aed, #2563eb)', color: '#fff',
+      padding: '10px 20px', borderRadius: '50px', fontSize: '14px',
+      fontWeight: '600', opacity: disabled ? 0.5 : 1, border: 'none', cursor: 'pointer', ...style
     }}>{children}</button>
   )
 }
@@ -561,10 +540,10 @@ function Btn({ children, onClick, style = {}, disabled = false }) {
 function ActionBtn({ children, onClick, color = '#888', bg }) {
   return (
     <button onClick={onClick} style={{
-      background: bg || 'rgba(255,255,255,0.05)',
-      color, width: '36px', height: '36px', borderRadius: '50%',
-      fontSize: '16px', border: '1px solid rgba(255,255,255,0.08)',
-      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+      background: bg || 'rgba(255,255,255,0.05)', color,
+      width: '36px', height: '36px', borderRadius: '50%', fontSize: '16px',
+      border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer',
+      display: 'flex', alignItems: 'center', justifyContent: 'center'
     }}>{children}</button>
   )
 }

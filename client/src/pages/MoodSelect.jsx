@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 const moods = [
   { id: 'vent', emoji: '😤', label: 'Vent Karna', desc: 'Koi sunne wala chahiye' },
   { id: 'laugh', emoji: '😂', label: 'Bas Hasna', desc: 'Comedy / timepass' },
@@ -8,12 +10,14 @@ const moods = [
 ]
 
 export default function MoodSelect({ onMoodSelect }) {
+  const [safeMode, setSafeMode] = useState(false)
+
   return (
     <div style={{
       height: '100vh', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
       background: 'linear-gradient(135deg, #0a0a0f 0%, #12001f 50%, #0a0f1a 100%)',
-      padding: '20px', gap: '28px', position: 'relative', overflow: 'hidden'
+      padding: '20px', gap: '20px', position: 'relative', overflow: 'hidden'
     }}>
       <div style={{
         position: 'absolute', width: '400px', height: '400px',
@@ -21,7 +25,7 @@ export default function MoodSelect({ onMoodSelect }) {
         top: '-100px', right: '-100px', borderRadius: '50%'
       }} />
 
-      {/* Logo small */}
+      {/* Logo */}
       <div style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}>
         <h2 style={{
           fontSize: '28px', fontWeight: '900', letterSpacing: '-1px',
@@ -36,13 +40,67 @@ export default function MoodSelect({ onMoodSelect }) {
         </p>
       </div>
 
+      {/* Safe Mode Toggle */}
+      <div
+        onClick={() => setSafeMode(!safeMode)}
+        style={{
+          position: 'relative', zIndex: 1,
+          display: 'flex', alignItems: 'center', gap: '12px',
+          background: safeMode ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.03)',
+          border: `1px solid ${safeMode ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.08)'}`,
+          borderRadius: '50px', padding: '10px 20px',
+          cursor: 'pointer', transition: 'all 0.3s',
+          width: '100%', maxWidth: '380px'
+        }}
+      >
+        <div style={{
+          width: '36px', height: '36px', borderRadius: '50%',
+          background: safeMode ? 'linear-gradient(135deg, #a78bfa, #60a5fa)' : 'rgba(255,255,255,0.05)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '18px', flexShrink: 0, transition: 'all 0.3s'
+        }}>🛡️</div>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ color: '#fff', fontSize: '14px', fontWeight: '700' }}>
+              Safe Mode
+            </span>
+            {safeMode && (
+              <span style={{
+                background: 'rgba(167,139,250,0.2)', color: '#a78bfa',
+                fontSize: '10px', padding: '2px 8px', borderRadius: '20px',
+                border: '1px solid rgba(167,139,250,0.3)'
+              }}>ON</span>
+            )}
+          </div>
+          <p style={{ color: '#555', fontSize: '11px', marginTop: '2px' }}>
+            {safeMode ? '✅ Tumhara face hidden rahega — sirf tum decide karoge kab dikhana hai' : 'Face blur + voice only — girls ke liye recommended'}
+          </p>
+        </div>
+
+        {/* Toggle switch */}
+        <div style={{
+          width: '40px', height: '22px', borderRadius: '11px',
+          background: safeMode ? 'linear-gradient(90deg, #7c3aed, #2563eb)' : 'rgba(255,255,255,0.1)',
+          position: 'relative', transition: 'all 0.3s', flexShrink: 0
+        }}>
+          <div style={{
+            position: 'absolute', top: '3px',
+            left: safeMode ? '21px' : '3px',
+            width: '16px', height: '16px', borderRadius: '50%',
+            background: '#fff', transition: 'left 0.3s'
+          }} />
+        </div>
+      </div>
+
+      {/* Mood grid */}
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',
         gap: '10px', width: '100%', maxWidth: '380px',
         position: 'relative', zIndex: 1
       }}>
         {moods.map((mood) => (
-          <button key={mood.id} onClick={() => onMoodSelect(mood.id)}
+          <button key={mood.id} onClick={() => onMoodSelect(mood.id, safeMode)}
             style={{
               padding: '18px 14px',
               background: 'rgba(255,255,255,0.03)',
@@ -68,7 +126,7 @@ export default function MoodSelect({ onMoodSelect }) {
         ))}
       </div>
 
-      <button onClick={() => onMoodSelect('any')} style={{
+      <button onClick={() => onMoodSelect('any', safeMode)} style={{
         color: '#444', background: 'none', fontSize: '13px',
         textDecoration: 'underline', cursor: 'pointer',
         position: 'relative', zIndex: 1, border: 'none'
