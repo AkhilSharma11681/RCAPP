@@ -2,18 +2,33 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Miloo — Same vibe. Real log. Asli connection. Random video chat with real people." />
-    <meta name="keywords" content="random video chat, miloo, omegle alternative, india chat, stranger chat" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="Miloo — Same vibe. Real log. Asli connection. Random video chat India." />
+    <meta name="keywords" content="random video chat, miloo, omegle alternative india, stranger chat, video chat india" />
+    <meta name="theme-color" content="#7c3aed" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Miloo" />
     <meta property="og:title" content="Miloo — Real Connections" />
     <meta property="og:description" content="Same vibe. Real log. Asli connection." />
+    <meta property="og:type" content="website" />
     <title>Miloo — Real Connections</title>
+    <link rel="manifest" href="/manifest.json" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <!-- AdSense placeholder — activate when domain ready -->
-    <!-- <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script> -->
+    <style>
+      * { -webkit-tap-highlight-color: transparent; }
+      body { margin: 0; background: #0a0a0f; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+        })
+      }
+    </script>
   </body>
 </html>
