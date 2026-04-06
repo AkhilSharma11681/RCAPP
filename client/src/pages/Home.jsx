@@ -13,7 +13,6 @@ export default function Home({ onStart }) {
       position: 'relative',
       overflow: 'hidden'
     }}>
-      {/* Background blobs */}
       <div style={{
         position: 'absolute', width: '400px', height: '400px',
         background: 'radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 70%)',
@@ -25,22 +24,10 @@ export default function Home({ onStart }) {
         bottom: '-50px', right: '-50px', borderRadius: '50%'
       }} />
 
-      {/* Logo */}
       <div style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          gap: '4px', marginBottom: '4px'
-        }}>
-          <div style={{
-            width: '36px', height: '36px', borderRadius: '50%',
-            background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
-            opacity: 0.9
-          }} />
-          <div style={{
-            width: '36px', height: '36px', borderRadius: '50%',
-            background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
-            marginLeft: '-12px', opacity: 0.9
-          }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginBottom: '4px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #7c3aed, #2563eb)', opacity: 0.9 }} />
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', marginLeft: '-12px', opacity: 0.9 }} />
         </div>
         <h1 style={{
           fontSize: '52px', fontWeight: '900', letterSpacing: '-2px',
@@ -50,10 +37,7 @@ export default function Home({ onStart }) {
       </div>
 
       <div style={{ position: 'relative', zIndex: 1 }}>
-        <p style={{
-          fontSize: '20px', fontWeight: '600', color: '#e2e8f0',
-          letterSpacing: '-0.5px', lineHeight: 1.4
-        }}>
+        <p style={{ fontSize: '20px', fontWeight: '600', color: '#e2e8f0', letterSpacing: '-0.5px', lineHeight: 1.4 }}>
           Same vibe. Real log.<br />Asli connection.
         </p>
         <p style={{ color: '#555', fontSize: '14px', marginTop: '8px' }}>
@@ -72,23 +56,13 @@ export default function Home({ onStart }) {
           boxShadow: '0 0 40px rgba(124,58,237,0.35)',
           transition: 'all 0.2s', border: 'none', cursor: 'pointer'
         }}
-        onMouseEnter={e => {
-          e.target.style.transform = 'scale(1.05)'
-          e.target.style.boxShadow = '0 0 60px rgba(124,58,237,0.5)'
-        }}
-        onMouseLeave={e => {
-          e.target.style.transform = 'scale(1)'
-          e.target.style.boxShadow = '0 0 40px rgba(124,58,237,0.35)'
-        }}
+        onMouseEnter={e => { e.target.style.transform = 'scale(1.05)'; e.target.style.boxShadow = '0 0 60px rgba(124,58,237,0.5)' }}
+        onMouseLeave={e => { e.target.style.transform = 'scale(1)'; e.target.style.boxShadow = '0 0 40px rgba(124,58,237,0.35)' }}
       >
         Miloo Kisi Se →
       </button>
 
-      {/* Stats */}
-      <div style={{
-        position: 'relative', zIndex: 1,
-        display: 'flex', gap: '32px', marginTop: '8px'
-      }}>
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: '32px', marginTop: '8px' }}>
         {[['🔒', 'Anonymous'], ['⚡', 'Instant Match'], ['🤖', 'Bot Free']].map(([icon, label]) => (
           <div key={label} style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '20px' }}>{icon}</div>
