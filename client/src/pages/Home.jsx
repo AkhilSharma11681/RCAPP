@@ -32,7 +32,7 @@ export default function Home({ onStart, onTerms }) {
 
       <div style={{ position: 'relative', zIndex: 1 }}>
         <p style={{ fontSize: '20px', fontWeight: '600', color: '#e2e8f0', lineHeight: 1.4 }}>
-          Same vibe. Real log.<br />Asli connection.
+          Same vibe. Real people.<br />Real connection.
         </p>
         <p style={{ color: '#555', fontSize: '14px', marginTop: '8px' }}>
           No signup. No data. 100% anonymous.
@@ -50,7 +50,7 @@ export default function Home({ onStart, onTerms }) {
         onMouseEnter={e => { e.target.style.transform = 'scale(1.05)'; e.target.style.boxShadow = '0 0 60px rgba(124,58,237,0.5)' }}
         onMouseLeave={e => { e.target.style.transform = 'scale(1)'; e.target.style.boxShadow = '0 0 40px rgba(124,58,237,0.35)' }}
       >
-        Miloo Kisi Se →
+        Meet Someone →
       </button>
 
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: '32px' }}>

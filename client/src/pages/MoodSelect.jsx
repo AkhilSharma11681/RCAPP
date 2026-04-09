@@ -1,12 +1,12 @@
 import { useState } from 'react'
 
 const moods = [
-  { id: 'vent', emoji: '😤', label: 'Vent Karna', desc: 'Koi sunne wala chahiye' },
-  { id: 'laugh', emoji: '😂', label: 'Bas Hasna', desc: 'Comedy / timepass' },
-  { id: 'music', emoji: '🎵', label: 'Music Talk', desc: 'Songs share karo' },
+  { id: 'vent', emoji: '😤', label: 'Vent', desc: 'Someone to listen' },
+  { id: 'laugh', emoji: '😂', label: 'Just Laugh', desc: 'Comedy & fun' },
+  { id: 'music', emoji: '🎵', label: 'Music', desc: 'Share what you love' },
   { id: 'deep', emoji: '🧠', label: 'Deep Talk', desc: 'Real conversations' },
-  { id: 'gaming', emoji: '🎮', label: 'Gaming', desc: 'Gaming buddy dhundo' },
-  { id: 'culture', emoji: '🌍', label: 'Culture', desc: 'Different world explore' },
+  { id: 'gaming', emoji: '🎮', label: 'Gaming', desc: 'Find a gaming buddy' },
+  { id: 'culture', emoji: '🌍', label: 'Culture', desc: 'Explore the world' },
 ]
 
 export default function MoodSelect({ onMoodSelect }) {
@@ -25,7 +25,6 @@ export default function MoodSelect({ onMoodSelect }) {
         top: '-100px', right: '-100px', borderRadius: '50%'
       }} />
 
-      {/* Logo */}
       <div style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}>
         <h2 style={{
           fontSize: '28px', fontWeight: '900', letterSpacing: '-1px',
@@ -33,38 +32,32 @@ export default function MoodSelect({ onMoodSelect }) {
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
         }}>miloo</h2>
         <p style={{ color: '#fff', fontSize: '20px', fontWeight: '700', marginTop: '8px' }}>
-          Aaj kya mood hai? 👇
+          What's your mood? 👇
         </p>
         <p style={{ color: '#444', fontSize: '13px', marginTop: '4px' }}>
-          Same vibe waale se miloge
+          You'll match with someone on the same vibe
         </p>
       </div>
 
       {/* Safe Mode Toggle */}
-      <div
-        onClick={() => setSafeMode(!safeMode)}
-        style={{
-          position: 'relative', zIndex: 1,
-          display: 'flex', alignItems: 'center', gap: '12px',
-          background: safeMode ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.03)',
-          border: `1px solid ${safeMode ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.08)'}`,
-          borderRadius: '50px', padding: '10px 20px',
-          cursor: 'pointer', transition: 'all 0.3s',
-          width: '100%', maxWidth: '380px'
-        }}
-      >
+      <div onClick={() => setSafeMode(!safeMode)} style={{
+        position: 'relative', zIndex: 1,
+        display: 'flex', alignItems: 'center', gap: '12px',
+        background: safeMode ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.03)',
+        border: `1px solid ${safeMode ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.08)'}`,
+        borderRadius: '50px', padding: '10px 20px',
+        cursor: 'pointer', transition: 'all 0.3s',
+        width: '100%', maxWidth: '380px'
+      }}>
         <div style={{
           width: '36px', height: '36px', borderRadius: '50%',
           background: safeMode ? 'linear-gradient(135deg, #a78bfa, #60a5fa)' : 'rgba(255,255,255,0.05)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: '18px', flexShrink: 0, transition: 'all 0.3s'
         }}>🛡️</div>
-
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#fff', fontSize: '14px', fontWeight: '700' }}>
-              Safe Mode
-            </span>
+            <span style={{ color: '#fff', fontSize: '14px', fontWeight: '700' }}>Safe Mode</span>
             {safeMode && (
               <span style={{
                 background: 'rgba(167,139,250,0.2)', color: '#a78bfa',
@@ -74,11 +67,11 @@ export default function MoodSelect({ onMoodSelect }) {
             )}
           </div>
           <p style={{ color: '#555', fontSize: '11px', marginTop: '2px' }}>
-            {safeMode ? '✅ Tumhara face hidden rahega — sirf tum decide karoge kab dikhana hai' : 'Face blur + voice only — girls ke liye recommended'}
+            {safeMode
+              ? '✅ Your face stays hidden — you decide when to reveal'
+              : 'Face blur + voice only — recommended for everyone'}
           </p>
         </div>
-
-        {/* Toggle switch */}
         <div style={{
           width: '40px', height: '22px', borderRadius: '11px',
           background: safeMode ? 'linear-gradient(90deg, #7c3aed, #2563eb)' : 'rgba(255,255,255,0.1)',
@@ -131,7 +124,7 @@ export default function MoodSelect({ onMoodSelect }) {
         textDecoration: 'underline', cursor: 'pointer',
         position: 'relative', zIndex: 1, border: 'none'
       }}>
-        Koi bhi chalega — random connect karo
+        No preference — match me randomly
       </button>
     </div>
   )
