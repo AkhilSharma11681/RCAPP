@@ -8,11 +8,7 @@ const rateLimit = require("express-rate-limit");
 const app = express();
 const server = http.createServer(app);
 
-// ─── Security Headers ───
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false
-}))
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }))
 
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
@@ -23,20 +19,17 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// ─── Rate limiting ───
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   message: { error: 'busy' }
 }));
 
-// ─── Self ping ───
 const SELF_URL = 'https://rcapp-server.onrender.com';
 setInterval(() => {
   fetch(SELF_URL).catch(() => {});
 }, 14 * 60 * 1000);
 
-// ─── Storage ───
 const waitingQueues = { vent: [], laugh: [], music: [], deep: [], gaming: [], culture: [], any: [] };
 const activePairs = new Map();
 const trustScores = new Map();
@@ -44,9 +37,7 @@ const reportCount = new Map();
 const bannedFingerprints = new Set();
 const ipJoinCount = new Map();
 const recentSkips = new Map();
-const connectionTime = new Map();
 
-// ─── Auto cleanup ───
 setInterval(() => {
   const now = Date.now();
   for (const [ip, data] of ipJoinCount.entries()) {
@@ -61,7 +52,6 @@ setInterval(() => {
   console.log(`Cleanup ✅ | Pairs: ${activePairs.size / 2} | Banned: ${bannedFingerprints.size}`);
 }, 30 * 60 * 1000);
 
-// ─── Security Functions ───
 function isRateLimited(ip) {
   const now = Date.now();
   const data = ipJoinCount.get(ip) || { count: 0, lastReset: now };
@@ -88,7 +78,7 @@ function isSuspiciousMessage(message) {
     /(instagram\.com|snapchat)/i,
     /(\+\d{10,})/,
     /(join.*group|join.*channel)/i,
-    /(earn.*money|make.*money|₹.*free)/i,
+    /(earn.*money|make.*money)/i,
   ];
   return patterns.some(p => p.test(message));
 }
@@ -120,38 +110,27 @@ function findMatch(socketId, mood) {
 }
 
 const convoStarters = [
-  "👋 Wave karo camera ko!",
-  "😂 30 seconds mein apni worst joke sunao",
-  "🤔 Ek cheez batao jo aaj interesting lagi",
-  "📦 Apne room ki sabse weird cheez dikhao",
-  "🎵 Abhi jo song sun rahe ho woh batao",
-  "🌍 Ek place batao jahan bahut jaana chahte ho",
-  "⚡ Ek superpower choose karo — fly ya invisible?",
-  "🍕 Abhi kya kha rahe ho ya khaoge?",
+  "👋 Wave at the camera!",
+  "😂 Tell your worst joke in 30 seconds",
+  "🤔 Share something interesting that happened today",
+  "📦 Show the weirdest thing in your room",
+  "🎵 What song are you listening to right now?",
+  "🌍 Name a place you really want to visit",
+  "⚡ Choose a superpower — fly or invisible?",
+  "🍕 What's the last thing you ate?",
+  "🎮 Favorite game of all time?",
+  "📚 Last book or show you binged?",
 ];
 function getRandomStarter() { return convoStarters[Math.floor(Math.random() * convoStarters.length)]; }
 
-// ─── Socket Logic ───
 io.on("connection", (socket) => {
   const clientIp = socket.handshake.headers["x-forwarded-for"]?.split(',')[0] || socket.handshake.address;
   const fingerprint = socket.handshake.auth?.fingerprint || "unknown";
-  connectionTime.set(socket.id, Date.now());
 
-  // Silent ban check
-  if (bannedFingerprints.has(fingerprint)) {
-    socket.emit("server_busy");
-    socket.disconnect();
-    return;
-  }
+  if (bannedFingerprints.has(fingerprint)) { socket.emit("server_busy"); socket.disconnect(); return; }
+  if (isRateLimited(clientIp)) { socket.emit("server_busy"); socket.disconnect(); return; }
 
-  // Rate limit check
-  if (isRateLimited(clientIp)) {
-    socket.emit("server_busy");
-    socket.disconnect();
-    return;
-  }
-
-  console.log(`Connected: ${socket.id} | Trust: ${getTrustScore(socket.id)}`);
+  console.log(`Connected: ${socket.id}`);
 
   socket.on("find_match", ({ mood }) => {
     removeFromQueues(socket.id);
@@ -161,15 +140,9 @@ io.on("connection", (socket) => {
       activePairs.delete(currentPartner);
       io.to(currentPartner).emit("partner_left");
     }
-
-    if (isSpamSkipping(socket.id)) {
-      socket.emit("slow_down", { waitSeconds: 15 });
-      return;
-    }
-
+    if (isSpamSkipping(socket.id)) { socket.emit("slow_down", { waitSeconds: 15 }); return; }
     const selectedMood = mood || "any";
     const partner = findMatch(socket.id, selectedMood);
-
     if (partner) {
       activePairs.set(socket.id, partner);
       activePairs.set(partner, socket.id);
@@ -190,19 +163,11 @@ io.on("connection", (socket) => {
   socket.on("send_message", ({ message, to }) => {
     if (!message || typeof message !== 'string') return;
     if (message.length > 300) return;
-
     if (isSuspiciousMessage(message)) {
       socket.emit("message_blocked");
       updateTrust(socket.id, -10);
-      const newTrust = getTrustScore(socket.id);
-      if (newTrust <= 0) {
-        bannedFingerprints.add(fingerprint);
-        socket.emit("server_busy");
-        socket.disconnect();
-      }
       return;
     }
-
     io.to(to).emit("receive_message", { message });
   });
 
@@ -222,7 +187,6 @@ io.on("connection", (socket) => {
       bannedFingerprints.add(partner);
       io.to(partner).emit("server_busy");
       io.sockets.sockets.get(partner)?.disconnect();
-      console.log(`Auto-banned: ${partner}`);
     }
     socket.emit("report_received");
   });
@@ -237,12 +201,10 @@ io.on("connection", (socket) => {
     }
     trustScores.delete(socket.id);
     recentSkips.delete(socket.id);
-    connectionTime.delete(socket.id);
     console.log(`Disconnected: ${socket.id}`);
   });
 });
 
-// ─── Health check ───
 app.get("/", (req, res) => {
   res.json({
     status: "miloo server running ✅",
@@ -253,4 +215,4 @@ app.get("/", (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => { console.log(`Miloo server running on port ${PORT} ✅`); });
+server.listen(PORT, () => { console.log(`Miloo server on port ${PORT} ✅`); });
