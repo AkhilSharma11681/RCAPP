@@ -1,17 +1,11 @@
-export default function Home({ onStart }) {
+export default function Home({ onStart, onTerms }) {
   return (
     <div style={{
-      height: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
+      height: '100vh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
       background: 'linear-gradient(135deg, #0a0a0f 0%, #12001f 50%, #0a0f1a 100%)',
-      gap: '28px',
-      padding: '20px',
-      textAlign: 'center',
-      position: 'relative',
-      overflow: 'hidden'
+      gap: '28px', padding: '20px', textAlign: 'center',
+      position: 'relative', overflow: 'hidden'
     }}>
       <div style={{
         position: 'absolute', width: '400px', height: '400px',
@@ -37,7 +31,7 @@ export default function Home({ onStart }) {
       </div>
 
       <div style={{ position: 'relative', zIndex: 1 }}>
-        <p style={{ fontSize: '20px', fontWeight: '600', color: '#e2e8f0', letterSpacing: '-0.5px', lineHeight: 1.4 }}>
+        <p style={{ fontSize: '20px', fontWeight: '600', color: '#e2e8f0', lineHeight: 1.4 }}>
           Same vibe. Real log.<br />Asli connection.
         </p>
         <p style={{ color: '#555', fontSize: '14px', marginTop: '8px' }}>
@@ -45,24 +39,21 @@ export default function Home({ onStart }) {
         </p>
       </div>
 
-      <button
-        onClick={onStart}
-        style={{
-          position: 'relative', zIndex: 1,
-          marginTop: '8px', padding: '16px 52px',
-          fontSize: '18px', fontWeight: '700',
-          background: 'linear-gradient(90deg, #7c3aed, #2563eb)',
-          color: '#fff', borderRadius: '50px',
-          boxShadow: '0 0 40px rgba(124,58,237,0.35)',
-          transition: 'all 0.2s', border: 'none', cursor: 'pointer'
-        }}
+      <button onClick={onStart} style={{
+        position: 'relative', zIndex: 1,
+        padding: '16px 52px', fontSize: '18px', fontWeight: '700',
+        background: 'linear-gradient(90deg, #7c3aed, #2563eb)',
+        color: '#fff', borderRadius: '50px',
+        boxShadow: '0 0 40px rgba(124,58,237,0.35)',
+        transition: 'all 0.2s', border: 'none', cursor: 'pointer'
+      }}
         onMouseEnter={e => { e.target.style.transform = 'scale(1.05)'; e.target.style.boxShadow = '0 0 60px rgba(124,58,237,0.5)' }}
         onMouseLeave={e => { e.target.style.transform = 'scale(1)'; e.target.style.boxShadow = '0 0 40px rgba(124,58,237,0.35)' }}
       >
         Miloo Kisi Se →
       </button>
 
-      <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: '32px', marginTop: '8px' }}>
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: '32px' }}>
         {[['🔒', 'Anonymous'], ['⚡', 'Instant Match'], ['🤖', 'Bot Free']].map(([icon, label]) => (
           <div key={label} style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '20px' }}>{icon}</div>
@@ -70,6 +61,14 @@ export default function Home({ onStart }) {
           </div>
         ))}
       </div>
+
+      <button onClick={onTerms} style={{
+        position: 'relative', zIndex: 1,
+        background: 'none', color: '#333',
+        fontSize: '12px', textDecoration: 'underline', cursor: 'pointer', border: 'none'
+      }}>
+        Terms & Privacy • 18+ only
+      </button>
     </div>
   )
 }
