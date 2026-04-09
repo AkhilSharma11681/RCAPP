@@ -22,7 +22,7 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
   const [muted, setMuted] = useState(false)
   const [camOff, setCamOff] = useState(false)
   const [showWelcome, setShowWelcome] = useState(false)
-  const [myBlur, setMyBlur] = useState(safeMode) // Safe mode — my face blurred
+  const [myBlur, setMyBlur] = useState(safeMode)
 
   const socketRef = useRef(null)
   const pcRef = useRef(null)
@@ -45,15 +45,11 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
     setCountdown(60)
     setShowWelcome(true)
     setTimeout(() => setShowWelcome(false), 3500)
-
     let timeLeft = 60
     countdownRef.current = setInterval(() => {
       timeLeft -= 1
       setCountdown(timeLeft)
-      if (timeLeft <= 0) {
-        clearInterval(countdownRef.current)
-        startReveal()
-      }
+      if (timeLeft <= 0) { clearInterval(countdownRef.current); startReveal() }
     }, 1000)
   }
 
@@ -99,8 +95,6 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
     if (track) { track.enabled = !track.enabled; setCamOff(!track.enabled) }
   }
 
-  function toggleMyBlur() { setMyBlur(!myBlur) }
-
   useEffect(() => {
     let socket
     const init = async () => {
@@ -120,7 +114,6 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
         setStatus('slow_down')
         setTimeout(() => { setStatus('waiting'); socket.emit('find_match', { mood }) }, waitSeconds * 1000)
       })
-
       socket.on('match_found', async ({ partnerId, initiator, starter: s }) => {
         partnerIdRef.current = partnerId
         setStarter(s)
@@ -130,7 +123,6 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
         startDarkRoomTimer()
         await startPC(initiator, socket, partnerId)
       })
-
       socket.on('webrtc_offer', async ({ offer, from }) => {
         partnerIdRef.current = from
         const pc = createPC(socket, from)
@@ -139,23 +131,18 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
         await pc.setLocalDescription(answer)
         socket.emit('webrtc_answer', { answer, to: from })
       })
-
       socket.on('webrtc_answer', async ({ answer }) => {
         await pcRef.current?.setRemoteDescription(new RTCSessionDescription(answer))
       })
-
       socket.on('ice_candidate', async ({ candidate }) => {
         try { await pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate)) } catch {}
       })
-
       socket.on('receive_message', ({ message }) => {
         setMessages(prev => [...prev, { from: 'them', text: message }])
       })
-
       socket.on('message_blocked', () => {
         setMessages(prev => [...prev, { from: 'system', text: '🚫 Links allowed nahi hain' }])
       })
-
       socket.on('partner_left', () => {
         setStatus('partner_left')
         clearInterval(countdownRef.current)
@@ -163,12 +150,10 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
         pcRef.current?.close()
         if (partnerVideoRef.current) partnerVideoRef.current.srcObject = null
       })
-
       socket.on('report_received', () => {
         setMessages(prev => [...prev, { from: 'system', text: '✅ Report submit ho gayi' }])
       })
     }
-
     init()
     return () => {
       clearInterval(countdownRef.current)
@@ -217,6 +202,18 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
     socketRef.current.emit('find_match', { mood })
   }
 
+  // Partner video filter — sirf darkRoom mein blur
+  const partnerFilter = darkRoom ? `blur(${blur}px) brightness(0.3)` : 'none'
+
+  // My video filter — darkRoom mein blur, ya safeMode myBlur ON ho
+  const myFilter = darkRoom
+    ? 'blur(8px) brightness(0.4)'
+    : camOff
+    ? 'brightness(0.15)'
+    : myBlur
+    ? 'blur(12px) brightness(0.3)'
+    : 'none'
+
   if (status === 'cam_error') return (
     <Center>
       <div style={{ textAlign: 'center' }}>
@@ -264,7 +261,6 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
             }}>🛡️ Safe</span>
           )}
         </div>
-
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {status === 'connected' && (
             <span style={{
@@ -289,11 +285,10 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
       <div style={{ flex: 1, position: 'relative', background: '#0a0a0f' }}>
         <video ref={partnerVideoRef} autoPlay playsInline style={{
           width: '100%', height: '100%', objectFit: 'cover',
-          filter: darkRoom ? `blur(${blur}px) brightness(0.3)` : 'none',
-          transition: 'filter 0.15s ease'
+          filter: partnerFilter, transition: 'filter 0.15s ease'
         }} />
 
-        {/* Welcome card */}
+        {/* Welcome card — NO HTML tags, plain text */}
         {showWelcome && (
           <div style={{
             position: 'absolute', inset: 0, zIndex: 15,
@@ -303,20 +298,32 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
             <div style={{
               background: 'linear-gradient(135deg, rgba(124,58,237,0.2), rgba(37,99,235,0.2))',
               border: '1px solid rgba(124,58,237,0.3)',
-              borderRadius: '24px', padding: '32px', textAlign: 'center', maxWidth: '300px'
+              borderRadius: '24px', padding: '32px',
+              textAlign: 'center', maxWidth: '300px'
             }}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>
                 {safeMode ? '🛡️' : '🌑'}
               </div>
-              <h3 style={{ color: '#fff', fontSize: '20px', fontWeight: '800', marginBottom: '8px' }}>
-                {safeMode ? 'Safe Mode ON! 🛡️' : 'Dark Room Mode'}
+              <h3 style={{ color: '#fff', fontSize: '20px', fontWeight: '800', marginBottom: '12px' }}>
+                {safeMode ? 'Safe Mode ON!' : 'Dark Room Mode'}
               </h3>
-              <p style={{ color: '#aaa', fontSize: '14px', lineHeight: 1.6 }}>
-                {safeMode
-                  ? 'Tumhara face <strong style="color:#a78bfa">hidden hai</strong>. Jab ready ho, neeche <strong style="color:#60a5fa">Reveal button</strong> dabao.'
-                  : 'Ye intentional hai! Pehle <strong style="color:#a78bfa">sirf voice</strong> se baat karo. 60s baad face reveal hoga. ✨'
-                }
-              </p>
+              {safeMode ? (
+                <p style={{ color: '#aaa', fontSize: '14px', lineHeight: 1.7 }}>
+                  Tumhara face{' '}
+                  <span style={{ color: '#a78bfa', fontWeight: '700' }}>hidden hai</span>.{' '}
+                  Jab ready ho, neeche{' '}
+                  <span style={{ color: '#60a5fa', fontWeight: '700' }}>Reveal button</span>{' '}
+                  dabao. ✨
+                </p>
+              ) : (
+                <p style={{ color: '#aaa', fontSize: '14px', lineHeight: 1.7 }}>
+                  Ye{' '}
+                  <span style={{ color: '#a78bfa', fontWeight: '700' }}>intentional</span>{' '}
+                  hai! Pehle sirf voice se baat karo.{' '}
+                  <span style={{ color: '#60a5fa', fontWeight: '700' }}>60s</span>{' '}
+                  baad face reveal hoga. ✨
+                </p>
+              )}
               <div style={{
                 marginTop: '16px', padding: '8px 16px',
                 background: 'rgba(124,58,237,0.15)', borderRadius: '50px',
@@ -338,8 +345,7 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
             <div style={{
               width: '80px', height: '80px', borderRadius: '50%',
               background: 'rgba(124,58,237,0.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '36px'
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px'
             }}>
               {status === 'partner_left' ? '👋' : '🔍'}
             </div>
@@ -423,15 +429,16 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
           position: 'absolute', bottom: '16px', right: '12px',
           width: '90px', height: '120px', objectFit: 'cover',
           borderRadius: '12px',
-          border: `2px solid ${safeMode && myBlur ? 'rgba(167,139,250,0.6)' : camOff ? 'rgba(239,68,68,0.6)' : 'rgba(124,58,237,0.6)'}`,
-          filter: (darkRoom || myBlur) ? 'blur(10px) brightness(0.4)' : camOff ? 'brightness(0.2)' : 'none',
-          transition: 'all 0.3s ease', boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+          border: `2px solid ${myBlur && !darkRoom ? 'rgba(167,139,250,0.6)' : camOff ? 'rgba(239,68,68,0.6)' : 'rgba(124,58,237,0.6)'}`,
+          filter: myFilter,
+          transition: 'all 0.3s ease',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
         }} />
 
-        {/* Safe mode reveal button on my video */}
+        {/* Safe mode reveal/hide button */}
         {safeMode && !darkRoom && (
-          <button onClick={toggleMyBlur} style={{
-            position: 'absolute', bottom: '8px', right: '8px',
+          <button onClick={() => setMyBlur(!myBlur)} style={{
+            position: 'absolute', bottom: '10px', right: '8px',
             background: myBlur ? 'rgba(167,139,250,0.9)' : 'rgba(74,222,128,0.9)',
             color: '#fff', border: 'none', borderRadius: '50px',
             fontSize: '10px', fontWeight: '700', padding: '4px 10px',
@@ -448,7 +455,6 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
         background: 'rgba(10,10,15,0.97)', backdropFilter: 'blur(20px)',
         borderTop: '1px solid rgba(255,255,255,0.06)'
       }}>
-        {/* Controls */}
         <div style={{
           display: 'flex', gap: '6px', padding: '8px 12px',
           justifyContent: 'space-between', alignItems: 'center'
@@ -471,7 +477,6 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
           <Btn onClick={findNext} style={{ padding: '7px 20px', fontSize: '13px' }}>⏭ Next</Btn>
         </div>
 
-        {/* Messages */}
         <div style={{
           height: '100px', overflowY: 'auto', padding: '4px 12px',
           display: 'flex', flexDirection: 'column', gap: '4px'
@@ -493,11 +498,10 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
         <div style={{ display: 'flex', gap: '8px', padding: '8px 12px 16px' }}>
           <input value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && sendMessage()}
-            placeholder={darkRoom ? '🌑 Voice mode...' : safeMode && myBlur ? '🛡️ Safe mode — type karo' : 'Message likho...'}
+            placeholder={darkRoom ? '🌑 Voice mode...' : safeMode && myBlur ? '🛡️ Safe mode mein ho...' : 'Message likho...'}
             style={{
               flex: 1, background: 'rgba(255,255,255,0.05)',
               border: '1px solid rgba(255,255,255,0.08)',
