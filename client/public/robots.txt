@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://miloo.chat/sitemap.xml
