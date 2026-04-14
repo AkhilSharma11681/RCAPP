@@ -55,7 +55,7 @@ const intents = [
 ]
 
 export default function MoodSelect({ onContinue }) {
-  const [safeMode, setSafeMode] = useState(true)
+  const [safeMode, setSafeMode] = useState(false)
   const [selectedMood, setSelectedMood] = useState('deep')
   const [selectedIntent, setSelectedIntent] = useState('interesting')
 
@@ -166,7 +166,7 @@ export default function MoodSelect({ onContinue }) {
                 maxWidth: '540px',
               }}
             >
-              The best conversations start with better intent. Choose your mood, tell us what you want from the chat, and start in a safer way.
+              The best conversations start with better intent. Choose your mood, tell us what you want from the chat, and turn on Safe Mode only if you want extra privacy.
             </p>
           </div>
 
@@ -205,28 +205,30 @@ export default function MoodSelect({ onContinue }) {
                 <span style={{ color: '#fff', fontSize: '16px', fontWeight: '800' }}>Safe Mode</span>
                 <span
                   style={{
-                    background: 'rgba(167,139,250,0.18)',
-                    color: '#ddd6fe',
+                    background: safeMode ? 'rgba(167,139,250,0.18)' : 'rgba(255,255,255,0.06)',
+                    color: safeMode ? '#ddd6fe' : '#b4b4c0',
                     fontSize: '10px',
                     padding: '3px 8px',
                     borderRadius: '999px',
-                    border: '1px solid rgba(167,139,250,0.24)',
+                    border: `1px solid ${safeMode ? 'rgba(167,139,250,0.24)' : 'rgba(255,255,255,0.08)'}`,
                     fontWeight: '800',
                   }}
                 >
-                  RECOMMENDED
+                  {safeMode ? 'ON' : 'OPTIONAL'}
                 </span>
               </div>
 
               <p
                 style={{
-                  color: '#d4d4f4',
+                  color: safeMode ? '#d4d4f4' : '#9e9eb0',
                   fontSize: '13px',
                   lineHeight: 1.6,
                   marginTop: '4px',
                 }}
               >
-                Start blurred + voice-first. Reveal later only when it feels right.
+                {safeMode
+                  ? 'Blur starts enabled for extra privacy.'
+                  : 'Video starts normally. Turn this on only if you want extra privacy.'}
               </p>
             </div>
 

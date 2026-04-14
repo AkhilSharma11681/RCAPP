@@ -6,12 +6,11 @@ const SERVER =
     ? 'http://localhost:3001'
     : 'https://rcapp-server.onrender.com'
 
-
 const iceConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-  ]
+  ],
 }
 
 const MOOD_META = {
@@ -116,22 +115,16 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
   const [input, setInput] = useState('')
   const [starter, setStarter] = useState('')
   const [goodSent, setGoodSent] = useState(false)
-  const [darkRoom, setDarkRoom] = useState(true)
-  const [countdown, setCountdown] = useState(60)
-  const [blur, setBlur] = useState(20)
   const [muted, setMuted] = useState(false)
   const [camOff, setCamOff] = useState(false)
-  const [showWelcome, setShowWelcome] = useState(false)
   const [myBlur, setMyBlur] = useState(safeMode)
+  const [partnerBlurred, setPartnerBlurred] = useState(safeMode)
   const [chatFocused, setChatFocused] = useState(false)
   const [unread, setUnread] = useState(0)
   const [waitingHint, setWaitingHint] = useState(randomFrom(moodMeta.waiting))
   const [matchSeconds, setMatchSeconds] = useState(0)
   const [quickPrompt, setQuickPrompt] = useState(randomFrom(moodMeta.prompts))
   const [reportSent, setReportSent] = useState(false)
-  const [partnerRevealReady, setPartnerRevealReady] = useState(false)
-  const [myRevealReady, setMyRevealReady] = useState(false)
-  const [fullyRevealed, setFullyRevealed] = useState(false)
 
   const socketRef = useRef(null)
   const pcRef = useRef(null)
@@ -140,8 +133,6 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
   const myStreamRef = useRef(null)
   const partnerIdRef = useRef(null)
   const messagesEndRef = useRef(null)
-  const countdownRef = useRef(null)
-  const blurRef = useRef(null)
   const inputRef = useRef(null)
   const waitingHintRef = useRef(null)
   const waitingTimerRef = useRef(null)
@@ -178,10 +169,11 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
 
   useEffect(() => {
     return () => {
-      clearInterval(countdownRef.current)
-      clearInterval(blurRef.current)
       clearInterval(waitingHintRef.current)
       clearInterval(waitingTimerRef.current)
+      pcRef.current?.close()
+      myStreamRef.current?.getTracks().forEach(track => track.stop())
+      socketRef.current?.disconnect()
     }
   }, [])
 
@@ -189,66 +181,15 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
     setMessages(prev => [...prev, { from: 'system', text, id: Date.now() + Math.random() }])
   }
 
-  function startDarkRoomTimer() {
-    setDarkRoom(true)
-    setBlur(20)
-    setCountdown(60)
-    setShowWelcome(true)
-    setQuickPrompt(randomFrom(moodMeta.prompts))
-    setMyRevealReady(false)
-    setPartnerRevealReady(false)
-    setFullyRevealed(false)
-
-    setTimeout(() => setShowWelcome(false), 3200)
-
-    let timeLeft = 60
-    countdownRef.current = setInterval(() => {
-      timeLeft -= 1
-      setCountdown(timeLeft)
-      if (timeLeft <= 0) {
-        clearInterval(countdownRef.current)
-        setMyRevealReady(true)
-        setPartnerRevealReady(true)
-        systemMessage('Reveal is now available. You stay in control.')
-      }
-    }, 1000)
-  }
-
-  function unlockReveal() {
-    if (!myRevealReady) return
-    let currentBlur = 20
-
-    clearInterval(blurRef.current)
-    blurRef.current = setInterval(() => {
-      currentBlur -= 1
-      setBlur(currentBlur)
-
-      if (currentBlur <= 0) {
-        clearInterval(blurRef.current)
-        setDarkRoom(false)
-        setFullyRevealed(true)
-        systemMessage('You revealed. Your match can choose separately.')
-      }
-    }, 120)
-  }
-
   function resetAll() {
-    clearInterval(countdownRef.current)
-    clearInterval(blurRef.current)
-    setDarkRoom(true)
-    setBlur(20)
-    setCountdown(60)
-    setShowWelcome(false)
-    setMyBlur(safeMode)
     setMessages([])
     setUnread(0)
     setChatFocused(false)
     setGoodSent(false)
     setReportSent(false)
     setQuickPrompt(randomFrom(moodMeta.prompts))
-    setMyRevealReady(false)
-    setPartnerRevealReady(false)
-    setFullyRevealed(false)
+    setPartnerBlurred(safeMode)
+    setMyBlur(safeMode)
   }
 
   async function initializeMediaAndSocket() {
@@ -271,7 +212,7 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
 
     socket.on('connect', () => {
       setStatus('waiting')
-      socket.emit('find_match', { mood })
+      socket.emit('find_match', { mood, intent })
     })
 
     socket.on('waiting', () => setStatus('waiting'))
@@ -282,7 +223,7 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
       systemMessage(`Too many fast skips. Try again in ${waitSeconds}s.`)
       setTimeout(() => {
         setStatus('waiting')
-        socket.emit('find_match', { mood })
+        socket.emit('find_match', { mood, intent })
       }, waitSeconds * 1000)
     })
 
@@ -291,7 +232,6 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
       setStarter(serverStarter || '')
       setStatus('connected')
       resetAll()
-      startDarkRoomTimer()
       await startPC(initiator, socket, partnerId)
     })
 
@@ -326,8 +266,6 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
 
     socket.on('partner_left', () => {
       setStatus('partner_left')
-      clearInterval(countdownRef.current)
-      clearInterval(blurRef.current)
       pcRef.current?.close()
       if (partnerVideoRef.current) partnerVideoRef.current.srcObject = null
     })
@@ -337,16 +275,6 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
       systemMessage('Report received. Thanks for helping keep Miloo safe.')
     })
   }
-
-  useEffect(() => {
-    return () => {
-      clearInterval(countdownRef.current)
-      clearInterval(blurRef.current)
-      pcRef.current?.close()
-      myStreamRef.current?.getTracks().forEach(track => track.stop())
-      socketRef.current?.disconnect()
-    }
-  }, [])
 
   function createPC(socket, partnerId) {
     if (pcRef.current) pcRef.current.close()
@@ -416,8 +344,6 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
   }
 
   function findNext() {
-    clearInterval(countdownRef.current)
-    clearInterval(blurRef.current)
     pcRef.current?.close()
 
     if (partnerVideoRef.current) partnerVideoRef.current.srcObject = null
@@ -425,7 +351,7 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
     setStatus('waiting')
     setStarter('')
     resetAll()
-    socketRef.current?.emit('find_match', { mood })
+    socketRef.current?.emit('find_match', { mood, intent })
   }
 
   function sendPrompt(prompt) {
@@ -444,14 +370,12 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
     socketRef.current?.emit('report_user')
   }
 
-  const partnerFilter = darkRoom ? `blur(${blur}px) brightness(0.3)` : 'none'
-  const myFilter = darkRoom
-    ? 'blur(8px) brightness(0.4)'
-    : camOff
-      ? 'brightness(0.15)'
-      : myBlur
-        ? 'blur(12px) brightness(0.3)'
-        : 'none'
+  const partnerFilter = partnerBlurred ? 'blur(14px) brightness(0.45)' : 'none'
+  const myFilter = camOff
+    ? 'brightness(0.15)'
+    : myBlur
+      ? 'blur(12px) brightness(0.35)'
+      : 'none'
 
   const visibleMessages = messages.filter(message => message.from !== 'system').slice(-4)
 
@@ -474,7 +398,7 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
             One quick step before matching
           </h2>
           <p style={{ color: '#a1a1b1', fontSize: '14px', lineHeight: 1.7, marginTop: '12px' }}>
-            Miloo needs camera and microphone access to start. You can still stay blurred in Safe Mode and reveal only when comfortable.
+            Miloo needs camera and microphone access to start. In Safe Mode, the video starts blurred and you stay in control.
           </p>
 
           <div
@@ -487,8 +411,8 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
           >
             {[
               'Camera + mic are needed to join live chat',
-              'Safe Mode keeps your face blurred at the start',
-              'Reveal stays in your control',
+              'Safe Mode starts with blur only when it is enabled',
+              'No forced reveal timer anymore',
             ].map(item => (
               <div
                 key={item}
@@ -585,7 +509,7 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
           height: '100%',
           objectFit: 'cover',
           filter: partnerFilter,
-          transition: 'filter 0.15s ease',
+          transition: 'filter 0.2s ease',
           background: 'radial-gradient(circle at center, #10101a, #020203)',
         }}
       />
@@ -679,42 +603,6 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
         </button>
       </div>
 
-      {showWelcome && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            zIndex: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0,0,0,0.84)',
-            backdropFilter: 'blur(22px)',
-            padding: '18px',
-          }}
-        >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '360px',
-              background: 'linear-gradient(135deg, rgba(124,58,237,0.22), rgba(37,99,235,0.22))',
-              border: '1px solid rgba(124,58,237,0.35)',
-              borderRadius: '28px',
-              padding: '28px',
-              textAlign: 'center',
-            }}
-          >
-            <div style={{ fontSize: '52px', marginBottom: '14px' }}>{safeMode ? '🛡️' : '🌑'}</div>
-            <h3 style={{ color: '#fff', fontSize: '22px', fontWeight: '800', marginBottom: '12px' }}>
-              Voice-first start
-            </h3>
-            <p style={{ color: '#c7c7d2', fontSize: '14px', lineHeight: 1.7 }}>
-              Start with conversation, not pressure. Reveal becomes available later, and you stay in control.
-            </p>
-          </div>
-        </div>
-      )}
-
       {(status === 'waiting' || status === 'slow_down' || status === 'partner_left' || status === 'connecting') && (
         <div
           style={{
@@ -766,100 +654,7 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
         </div>
       )}
 
-      {status === 'connected' && darkRoom && !showWelcome && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            zIndex: 8,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '16px',
-            padding: '20px',
-          }}
-        >
-          <div style={{ position: 'relative', width: '94px', height: '94px' }}>
-            {[0, 1, 2].map(index => (
-              <div
-                key={index}
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  borderRadius: '50%',
-                  border: '2px solid rgba(124,58,237,0.5)',
-                  animation: `pulse ${1.2 + index * 0.4}s ease-out infinite`,
-                  animationDelay: `${index * 0.3}s`,
-                }}
-              />
-            ))}
-            <div
-              style={{
-                position: 'absolute',
-                inset: '18px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '23px',
-              }}
-            >
-              🎤
-            </div>
-          </div>
-
-          <div style={{ textAlign: 'center', maxWidth: '360px' }}>
-            <p style={{ color: '#fff', fontSize: '19px', fontWeight: '800' }}>
-              Voice-first mode {countdown > 0 ? `• reveal in ${countdown}s` : '• reveal available'}
-            </p>
-            <p style={{ color: '#9a9aae', fontSize: '13px', marginTop: '6px', lineHeight: 1.6 }}>
-              Better chats start with less pressure and more intent.
-            </p>
-          </div>
-
-          <div
-            style={{
-              maxWidth: '380px',
-              width: '100%',
-              background: 'rgba(0,0,0,0.46)',
-              backdropFilter: 'blur(12px)',
-              borderRadius: '18px',
-              border: '1px solid rgba(255,255,255,0.1)',
-              padding: '14px',
-            }}
-          >
-            <div style={{ color: '#c4b5fd', fontSize: '12px', fontWeight: '700', marginBottom: '8px' }}>
-              Starter idea
-            </div>
-            <div style={{ color: '#fff', fontSize: '14px', lineHeight: 1.6 }}>
-              {quickPrompt}
-            </div>
-          </div>
-
-          {myRevealReady && (
-            <button
-              onClick={unlockReveal}
-              style={{
-                background: 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,255,255,0.16)',
-                color: '#ddd',
-                fontSize: '13px',
-                fontWeight: '600',
-                padding: '9px 18px',
-                borderRadius: '999px',
-                cursor: 'pointer',
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              Reveal myself
-            </button>
-          )}
-        </div>
-      )}
-
-      {status === 'connected' && !darkRoom && (
+      {status === 'connected' && (
         <div
           style={{
             position: 'absolute',
@@ -929,7 +724,7 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
             height: '126px',
             objectFit: 'cover',
             borderRadius: '16px',
-            border: `2px solid ${myBlur && !darkRoom ? 'rgba(196,181,253,0.75)' : camOff ? 'rgba(239,68,68,0.7)' : 'rgba(124,58,237,0.75)'}`,
+            border: `2px solid ${myBlur ? 'rgba(196,181,253,0.75)' : camOff ? 'rgba(239,68,68,0.7)' : 'rgba(124,58,237,0.75)'}`,
             filter: myFilter,
             transition: 'all 0.3s ease',
             boxShadow: '0 10px 32px rgba(0,0,0,0.6)',
@@ -937,7 +732,7 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
           }}
         />
 
-        {safeMode && !darkRoom && (
+        {safeMode && (
           <button
             onClick={() => setMyBlur(!myBlur)}
             style={{
@@ -961,7 +756,7 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
         )}
       </div>
 
-      {status === 'connected' && !darkRoom && visibleMessages.length > 0 && (
+      {status === 'connected' && visibleMessages.length > 0 && (
         <div
           style={{
             position: 'absolute',
@@ -1069,7 +864,7 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
               setUnread(0)
             }}
             onBlur={() => setChatFocused(false)}
-            placeholder={darkRoom ? 'Start with something real...' : 'Send a message...'}
+            placeholder="Send a message..."
             style={{
               flex: 1,
               background: 'none',
@@ -1128,6 +923,12 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
               {camOff ? '📵' : '📹'}
             </GlassBtn>
 
+            {safeMode && (
+              <GlassBtn onClick={() => setPartnerBlurred(!partnerBlurred)} active={partnerBlurred} activeColor="rgba(167,139,250,0.35)">
+                {partnerBlurred ? '🙈' : '👁️'}
+              </GlassBtn>
+            )}
+
             <GlassBtn onClick={reportUser} active={reportSent} activeColor="rgba(239,68,68,0.35)">
               {reportSent ? '✅' : '🚩'}
             </GlassBtn>
@@ -1160,14 +961,11 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
       </div>
 
       <style>{`
-        @keyframes pulse {
-          0% { transform: scale(1); opacity: 0.8; }
-          100% { transform: scale(2.5); opacity: 0; }
-        }
         @keyframes msgPop {
           from { transform: translateY(8px); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
         }
+
         input::placeholder {
           color: #6b6b78;
         }

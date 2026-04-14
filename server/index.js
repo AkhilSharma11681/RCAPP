@@ -38,18 +38,7 @@ setInterval(() => {
   fetch(SELF_URL).catch(() => {});
 }, 14 * 60 * 1000);
 
-const MOODS = ["vent", "laugh", "music", "deep", "gaming", "culture", "any"];
-
-const waitingQueues = {
-  vent: [],
-  laugh: [],
-  music: [],
-  deep: [],
-  gaming: [],
-  culture: [],
-  any: [],
-};
-
+const waitingQueue = [];
 const activePairs = new Map();
 const trustScores = new Map();
 const reportCount = new Map();
@@ -101,12 +90,13 @@ function now() {
   return Date.now();
 }
 
-function createQueueEntry(socketId, mood) {
-  return {
-    socketId,
-    mood,
-    joinedAt: now(),
-  };
+function randomFrom(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function getStarterForMood(mood) {
+  const starterList = CONVO_STARTERS[mood] || CONVO_STARTERS.any;
+  return randomFrom(starterList);
 }
 
 function getTrustScore(socketId) {
@@ -119,23 +109,91 @@ function updateTrust(socketId, delta) {
   return updated;
 }
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
+function getSocket(socketId) {
+  return io.sockets.sockets.get(socketId);
 }
 
-function randomFrom(list) {
-  return list[Math.floor(Math.random() * list.length)];
+function setUserMeta(socketId, meta) {
+  userMeta.set(socketId, {
+    ...meta,
+    lastSeenAt: now(),
+  });
 }
 
-function getStarterForMood(mood) {
-  const starterList = CONVO_STARTERS[mood] || CONVO_STARTERS.any;
-  return randomFrom(starterList);
+function getUserMeta(socketId) {
+  return userMeta.get(socketId) || null;
 }
 
 function removeFromQueues(socketId) {
-  for (const mood of MOODS) {
-    waitingQueues[mood] = waitingQueues[mood].filter(entry => entry.socketId !== socketId);
+  const index = waitingQueue.findIndex(entry => entry.socketId === socketId);
+  if (index !== -1) waitingQueue.splice(index, 1);
+}
+
+function queueUser(socketId, mood, intent) {
+  removeFromQueues(socketId);
+  waitingQueue.push({
+    socketId,
+    mood,
+    intent,
+    joinedAt: now(),
+  });
+}
+
+function createPair(socketA, socketB, moodUsed) {
+  activePairs.set(socketA, socketB);
+  activePairs.set(socketB, socketA);
+
+  activeChatMeta.set(socketA, { partnerId: socketB, mood: moodUsed, startedAt: now() });
+  activeChatMeta.set(socketB, { partnerId: socketA, mood: moodUsed, startedAt: now() });
+}
+
+function removePair(socketId, notifyPartner = false) {
+  const partnerId = activePairs.get(socketId);
+  if (!partnerId) return null;
+
+  activePairs.delete(socketId);
+  activePairs.delete(partnerId);
+
+  activeChatMeta.delete(socketId);
+  activeChatMeta.delete(partnerId);
+
+  if (notifyPartner) {
+    io.to(partnerId).emit("partner_left");
   }
+
+  return partnerId;
+}
+
+function findMatch(socketId) {
+  const requesterTrust = getTrustScore(socketId);
+
+  let bestIndex = -1;
+  let bestScore = -Infinity;
+
+  for (let i = 0; i < waitingQueue.length; i += 1) {
+    const candidate = waitingQueue[i];
+    const candidateId = candidate.socketId;
+
+    if (candidateId === socketId) continue;
+    if (!getSocket(candidateId)) continue;
+    if (activePairs.has(candidateId)) continue;
+
+    const candidateTrust = getTrustScore(candidateId);
+    const waitSeconds = Math.floor((now() - candidate.joinedAt) / 1000);
+    const trustGap = Math.abs(requesterTrust - candidateTrust);
+
+    const score = waitSeconds * 1.2 - trustGap * 1.4 + candidateTrust * 0.08;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  }
+
+  if (bestIndex === -1) return null;
+
+  const [picked] = waitingQueue.splice(bestIndex, 1);
+  return picked.socketId;
 }
 
 function isRateLimited(ip) {
@@ -176,6 +234,10 @@ function cleanupRecentSkips() {
   }
 }
 
+function normalizeMessage(message) {
+  return String(message || "").trim().replace(/\s+/g, " ");
+}
+
 function isSuspiciousMessage(message) {
   const patterns = [
     /(https?:\/\/)/i,
@@ -189,106 +251,6 @@ function isSuspiciousMessage(message) {
   ];
 
   return patterns.some(pattern => pattern.test(message));
-}
-
-function normalizeMessage(message) {
-  return String(message || "").trim().replace(/\s+/g, " ");
-}
-
-function getSocket(socketId) {
-  return io.sockets.sockets.get(socketId);
-}
-
-function setUserMeta(socketId, meta) {
-  userMeta.set(socketId, {
-    ...meta,
-    lastSeenAt: now(),
-  });
-}
-
-function getUserMeta(socketId) {
-  return userMeta.get(socketId) || null;
-}
-
-function createPair(socketA, socketB, moodUsed) {
-  activePairs.set(socketA, socketB);
-  activePairs.set(socketB, socketA);
-
-  activeChatMeta.set(socketA, { partnerId: socketB, mood: moodUsed, startedAt: now() });
-  activeChatMeta.set(socketB, { partnerId: socketA, mood: moodUsed, startedAt: now() });
-}
-
-function removePair(socketId, notifyPartner = false) {
-  const partnerId = activePairs.get(socketId);
-  if (!partnerId) return null;
-
-  activePairs.delete(socketId);
-  activePairs.delete(partnerId);
-
-  activeChatMeta.delete(socketId);
-  activeChatMeta.delete(partnerId);
-
-  if (notifyPartner) {
-    io.to(partnerId).emit("partner_left");
-  }
-
-  return partnerId;
-}
-
-function queueUser(socketId, mood) {
-  removeFromQueues(socketId);
-  waitingQueues[mood].push(createQueueEntry(socketId, mood));
-}
-
-function preferredQueuesForMood(mood, trust) {
-  if (trust < 20) return ["any"];
-  if (mood === "any") return ["any", "deep", "laugh", "vent", "music", "gaming", "culture"];
-  return [mood, "any"];
-}
-
-function pickBestCandidate(queue, requesterId) {
-  const requesterTrust = getTrustScore(requesterId);
-
-  let bestIndex = -1;
-  let bestScore = -Infinity;
-
-  for (let i = 0; i < queue.length; i += 1) {
-    const candidate = queue[i];
-    const socketId = candidate.socketId;
-
-    if (socketId === requesterId) continue;
-    if (!getSocket(socketId)) continue;
-    if (activePairs.has(socketId)) continue;
-
-    const candidateTrust = getTrustScore(socketId);
-    const waitSeconds = Math.floor((now() - candidate.joinedAt) / 1000);
-    const trustGap = Math.abs(requesterTrust - candidateTrust);
-
-    const score = waitSeconds * 1.2 - trustGap * 1.4 + candidateTrust * 0.08;
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestIndex = i;
-    }
-  }
-
-  if (bestIndex === -1) return null;
-
-  const [picked] = queue.splice(bestIndex, 1);
-  return picked.socketId;
-}
-
-function findMatch(socketId, mood) {
-  const trust = getTrustScore(socketId);
-  const targetQueues = preferredQueuesForMood(mood, trust);
-
-  for (const queueMood of targetQueues) {
-    const queue = waitingQueues[queueMood];
-    const candidate = pickBestCandidate(queue, socketId);
-    if (candidate) return candidate;
-  }
-
-  return null;
 }
 
 function getPairDurationSeconds(socketId) {
@@ -330,11 +292,13 @@ setInterval(() => {
 
   cleanupRecentSkips();
 
-  for (const mood of MOODS) {
-    waitingQueues[mood] = waitingQueues[mood].filter(entry => {
-      const socket = getSocket(entry.socketId);
-      return !!socket && !activePairs.has(entry.socketId);
-    });
+  for (let i = waitingQueue.length - 1; i >= 0; i -= 1) {
+    const entry = waitingQueue[i];
+    const socket = getSocket(entry.socketId);
+
+    if (!socket || activePairs.has(entry.socketId)) {
+      waitingQueue.splice(i, 1);
+    }
   }
 
   if (bannedFingerprints.size > 10000) {
@@ -342,7 +306,7 @@ setInterval(() => {
   }
 
   console.log(
-    `Cleanup ✅ | Waiting: ${MOODS.reduce((sum, mood) => sum + waitingQueues[mood].length, 0)} | Pairs: ${activePairs.size / 2} | Banned: ${bannedFingerprints.size}`
+    `Cleanup ✅ | Waiting: ${waitingQueue.length} | Pairs: ${activePairs.size / 2} | Banned: ${bannedFingerprints.size}`
   );
 }, 30 * 60 * 1000);
 
@@ -374,8 +338,9 @@ io.on("connection", socket => {
 
   console.log(`Connected: ${socket.id}`);
 
-  socket.on("find_match", ({ mood }) => {
-    const selectedMood = MOODS.includes(mood) ? mood : "any";
+  socket.on("find_match", ({ mood, intent }) => {
+    const selectedMood = typeof mood === "string" ? mood : "any";
+    const selectedIntent = typeof intent === "string" ? intent : "random";
 
     removeFromQueues(socket.id);
 
@@ -390,13 +355,19 @@ io.on("connection", socket => {
       return;
     }
 
-    const partnerId = findMatch(socket.id, selectedMood);
+    const meta = getUserMeta(socket.id) || {};
+    setUserMeta(socket.id, {
+      ...meta,
+      lastMood: selectedMood,
+      lastIntent: selectedIntent,
+    });
+
+    const partnerId = findMatch(socket.id);
 
     if (partnerId) {
-      createPair(socket.id, partnerId, selectedMood);
+      createPair(socket.id, partnerId, "any");
 
-      const starterMood = selectedMood === "any" ? (getUserMeta(partnerId)?.lastMood || "any") : selectedMood;
-      const starter = getStarterForMood(starterMood);
+      const starter = getStarterForMood(selectedMood);
 
       io.to(socket.id).emit("match_found", {
         partnerId,
@@ -413,15 +384,9 @@ io.on("connection", socket => {
       updateTrust(socket.id, +1);
       updateTrust(partnerId, +1);
 
-      console.log(`Matched: ${socket.id} ↔ ${partnerId} | mood=${selectedMood}`);
+      console.log(`Matched: ${socket.id} ↔ ${partnerId} | broad-match`);
     } else {
-      const meta = getUserMeta(socket.id) || {};
-      setUserMeta(socket.id, {
-        ...meta,
-        lastMood: selectedMood,
-      });
-
-      queueUser(socket.id, selectedMood);
+      queueUser(socket.id, selectedMood, selectedIntent);
       socket.emit("waiting");
     }
   });
@@ -501,11 +466,9 @@ io.on("connection", socket => {
 });
 
 app.get("/", (req, res) => {
-  const waiting = MOODS.reduce((sum, mood) => sum + waitingQueues[mood].length, 0);
-
   res.json({
     status: "miloo server running ✅",
-    waiting_users: waiting,
+    waiting_users: waitingQueue.length,
     active_pairs: activePairs.size / 2,
     banned: bannedFingerprints.size,
     uptime: `${Math.floor(process.uptime() / 60)} mins`,

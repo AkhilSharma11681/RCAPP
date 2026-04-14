@@ -8,7 +8,7 @@ export default function App() {
   const [page, setPage] = useState('home')
   const [selectedMood, setSelectedMood] = useState(null)
   const [selectedIntent, setSelectedIntent] = useState(null)
-  const [safeMode, setSafeMode] = useState(true)
+  const [safeMode, setSafeMode] = useState(false)
 
   useEffect(() => {
     const handleEsc = event => {
@@ -33,7 +33,7 @@ export default function App() {
   const goHome = () => {
     setSelectedMood(null)
     setSelectedIntent(null)
-    setSafeMode(true)
+    setSafeMode(false)
     setPage('home')
   }
 
