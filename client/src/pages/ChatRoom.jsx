@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 
-const SERVER = 'https://rcapp-server.onrender.com'
+const SERVER = 'http://localhost:3001'
+
 const iceConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -9,15 +10,110 @@ const iceConfig = {
   ]
 }
 
-export default function ChatRoom({ mood, safeMode, onExit }) {
-  const [status, setStatus] = useState('connecting')
+const MOOD_META = {
+  vent: {
+    label: 'Vent',
+    emoji: '😤',
+    waiting: ['Finding a calm listener...', 'Matching you with someone patient...', 'Looking for a safe space conversation...'],
+    prompts: [
+      'Do you want advice, comfort, or just someone to listen?',
+      'What kind of day have you had so far?',
+      'What is on your mind most right now?',
+    ],
+  },
+  laugh: {
+    label: 'Just Laugh',
+    emoji: '😂',
+    waiting: ['Finding someone fun...', 'Looking for a light vibe match...', 'Searching for instant chaos and jokes...'],
+    prompts: [
+      'Tell the worst joke you know.',
+      'What is the funniest thing you saw this week?',
+      'If your life had a meme title, what would it be?',
+    ],
+  },
+  music: {
+    label: 'Music',
+    emoji: '🎵',
+    waiting: ['Finding another music lover...', 'Looking for someone on your wavelength...', 'Searching for a shared soundtrack...'],
+    prompts: [
+      'What song matches your mood right now?',
+      'Which artist do you never get tired of?',
+      'What song would you play for a stranger first?',
+    ],
+  },
+  deep: {
+    label: 'Deep Talk',
+    emoji: '🧠',
+    waiting: ['Finding someone real...', 'Looking for a thoughtful conversation...', 'Searching for a deeper connection...'],
+    prompts: [
+      'What have you been thinking about a lot lately?',
+      'What is something you understand better now than a year ago?',
+      'What kind of conversation are you hoping for tonight?',
+    ],
+  },
+  gaming: {
+    label: 'Gaming',
+    emoji: '🎮',
+    waiting: ['Finding another gamer...', 'Looking for your next duo partner...', 'Searching for someone in the same lobby of life...'],
+    prompts: [
+      'What game could you replay forever?',
+      'Controller or keyboard?',
+      'What game are you best at but still complain about?',
+    ],
+  },
+  culture: {
+    label: 'Culture',
+    emoji: '🌍',
+    waiting: ['Finding someone from another world...', 'Looking for a curious mind...', 'Searching for a global vibe match...'],
+    prompts: [
+      'Where are you from and what is underrated about it?',
+      'What food should everyone try once?',
+      'What custom from your culture do you love most?',
+    ],
+  },
+  any: {
+    label: 'Random',
+    emoji: '✨',
+    waiting: ['Finding a good surprise...', 'Looking for someone interesting...', 'Searching across every vibe...'],
+    prompts: [
+      'What kind of conversation are you open to?',
+      'What is your energy like tonight?',
+      'What usually makes a stranger instantly interesting to you?',
+    ],
+  },
+}
+
+const INTENT_META = {
+  listener: 'Wants to be heard',
+  advice: 'Open to advice',
+  vibe: 'Just wants to vibe',
+  fun: 'Wants playful energy',
+  interesting: 'Wants someone interesting',
+  random: 'Open to anything',
+}
+
+function getMoodMeta(mood) {
+  return MOOD_META[mood] || MOOD_META.any
+}
+
+function randomFrom(list) {
+  return list[Math.floor(Math.random() * list.length)]
+}
+
+function fingerprint() {
+  return 'fp_' + Math.random().toString(36).slice(2, 11)
+}
+
+export default function ChatRoom({ mood, intent, safeMode, onExit }) {
+  const moodMeta = useMemo(() => getMoodMeta(mood), [mood])
+
+  const [status, setStatus] = useState('pre_permission')
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [starter, setStarter] = useState('')
   const [goodSent, setGoodSent] = useState(false)
   const [darkRoom, setDarkRoom] = useState(true)
   const [countdown, setCountdown] = useState(60)
-  const [revealed, setRevealed] = useState(false)
   const [blur, setBlur] = useState(20)
   const [muted, setMuted] = useState(false)
   const [camOff, setCamOff] = useState(false)
@@ -25,6 +121,13 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
   const [myBlur, setMyBlur] = useState(safeMode)
   const [chatFocused, setChatFocused] = useState(false)
   const [unread, setUnread] = useState(0)
+  const [waitingHint, setWaitingHint] = useState(randomFrom(moodMeta.waiting))
+  const [matchSeconds, setMatchSeconds] = useState(0)
+  const [quickPrompt, setQuickPrompt] = useState(randomFrom(moodMeta.prompts))
+  const [reportSent, setReportSent] = useState(false)
+  const [partnerRevealReady, setPartnerRevealReady] = useState(false)
+  const [myRevealReady, setMyRevealReady] = useState(false)
+  const [fullyRevealed, setFullyRevealed] = useState(false)
 
   const socketRef = useRef(null)
   const pcRef = useRef(null)
@@ -36,137 +139,239 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
   const countdownRef = useRef(null)
   const blurRef = useRef(null)
   const inputRef = useRef(null)
+  const waitingHintRef = useRef(null)
+  const waitingTimerRef = useRef(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     if (chatFocused) setUnread(0)
-  }, [messages])
+  }, [messages, chatFocused])
+
+  useEffect(() => {
+    if (!['waiting', 'connecting', 'slow_down'].includes(status)) {
+      clearInterval(waitingHintRef.current)
+      clearInterval(waitingTimerRef.current)
+      setMatchSeconds(0)
+      return
+    }
+
+    setWaitingHint(randomFrom(moodMeta.waiting))
+    setMatchSeconds(0)
+
+    waitingHintRef.current = setInterval(() => {
+      setWaitingHint(randomFrom(moodMeta.waiting))
+    }, 2600)
+
+    waitingTimerRef.current = setInterval(() => {
+      setMatchSeconds(prev => prev + 1)
+    }, 1000)
+
+    return () => {
+      clearInterval(waitingHintRef.current)
+      clearInterval(waitingTimerRef.current)
+    }
+  }, [status, moodMeta])
+
+  useEffect(() => {
+    return () => {
+      clearInterval(countdownRef.current)
+      clearInterval(blurRef.current)
+      clearInterval(waitingHintRef.current)
+      clearInterval(waitingTimerRef.current)
+    }
+  }, [])
+
+  function systemMessage(text) {
+    setMessages(prev => [...prev, { from: 'system', text, id: Date.now() + Math.random() }])
+  }
 
   function startDarkRoomTimer() {
-    setDarkRoom(true); setRevealed(false); setBlur(20); setCountdown(60)
+    setDarkRoom(true)
+    setBlur(20)
+    setCountdown(60)
     setShowWelcome(true)
-    setTimeout(() => setShowWelcome(false), 3500)
+    setQuickPrompt(randomFrom(moodMeta.prompts))
+    setMyRevealReady(false)
+    setPartnerRevealReady(false)
+    setFullyRevealed(false)
+
+    setTimeout(() => setShowWelcome(false), 3200)
+
     let timeLeft = 60
     countdownRef.current = setInterval(() => {
-      timeLeft -= 1; setCountdown(timeLeft)
-      if (timeLeft <= 0) { clearInterval(countdownRef.current); startReveal() }
+      timeLeft -= 1
+      setCountdown(timeLeft)
+      if (timeLeft <= 0) {
+        clearInterval(countdownRef.current)
+        setMyRevealReady(true)
+        setPartnerRevealReady(true)
+        systemMessage('Reveal is now available. You stay in control.')
+      }
     }, 1000)
   }
 
-  function startReveal() {
-    let b = 20
-    blurRef.current = setInterval(() => {
-      b -= 1; setBlur(b)
-      if (b <= 0) {
-        clearInterval(blurRef.current)
-        setDarkRoom(false); setRevealed(true)
-        setTimeout(() => setRevealed(false), 3000)
-      }
-    }, 150)
-  }
+  function unlockReveal() {
+    if (!myRevealReady) return
+    let currentBlur = 20
 
-  function skipDarkRoom() {
-    clearInterval(countdownRef.current)
     clearInterval(blurRef.current)
-    startReveal()
+    blurRef.current = setInterval(() => {
+      currentBlur -= 1
+      setBlur(currentBlur)
+
+      if (currentBlur <= 0) {
+        clearInterval(blurRef.current)
+        setDarkRoom(false)
+        setFullyRevealed(true)
+        systemMessage('You revealed. Your match can choose separately.')
+      }
+    }, 120)
   }
 
   function resetAll() {
     clearInterval(countdownRef.current)
     clearInterval(blurRef.current)
-    setDarkRoom(true); setRevealed(false); setBlur(20); setCountdown(60)
-    setShowWelcome(false); setMyBlur(safeMode)
-    setMessages([]); setUnread(0); setChatFocused(false)
+    setDarkRoom(true)
+    setBlur(20)
+    setCountdown(60)
+    setShowWelcome(false)
+    setMyBlur(safeMode)
+    setMessages([])
+    setUnread(0)
+    setChatFocused(false)
+    setGoodSent(false)
+    setReportSent(false)
+    setQuickPrompt(randomFrom(moodMeta.prompts))
+    setMyRevealReady(false)
+    setPartnerRevealReady(false)
+    setFullyRevealed(false)
   }
 
-  function toggleMute() {
-    const t = myStreamRef.current?.getAudioTracks()[0]
-    if (t) { t.enabled = !t.enabled; setMuted(!t.enabled) }
-  }
+  async function initializeMediaAndSocket() {
+    setStatus('connecting')
 
-  function toggleCam() {
-    const t = myStreamRef.current?.getVideoTracks()[0]
-    if (t) { t.enabled = !t.enabled; setCamOff(!t.enabled) }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      myStreamRef.current = stream
+      if (myVideoRef.current) myVideoRef.current.srcObject = stream
+    } catch {
+      setStatus('cam_error')
+      return
+    }
+
+    const socket = io(SERVER, {
+      auth: { fingerprint: fingerprint() },
+    })
+
+    socketRef.current = socket
+
+    socket.on('connect', () => {
+      setStatus('waiting')
+      socket.emit('find_match', { mood })
+    })
+
+    socket.on('waiting', () => setStatus('waiting'))
+    socket.on('server_busy', () => setStatus('busy'))
+
+    socket.on('slow_down', ({ waitSeconds }) => {
+      setStatus('slow_down')
+      systemMessage(`Too many fast skips. Try again in ${waitSeconds}s.`)
+      setTimeout(() => {
+        setStatus('waiting')
+        socket.emit('find_match', { mood })
+      }, waitSeconds * 1000)
+    })
+
+    socket.on('match_found', async ({ partnerId, initiator, starter: serverStarter }) => {
+      partnerIdRef.current = partnerId
+      setStarter(serverStarter || '')
+      setStatus('connected')
+      resetAll()
+      startDarkRoomTimer()
+      await startPC(initiator, socket, partnerId)
+    })
+
+    socket.on('webrtc_offer', async ({ offer, from }) => {
+      partnerIdRef.current = from
+      const pc = createPC(socket, from)
+      await pc.setRemoteDescription(new RTCSessionDescription(offer))
+      const answer = await pc.createAnswer()
+      await pc.setLocalDescription(answer)
+      socket.emit('webrtc_answer', { answer, to: from })
+    })
+
+    socket.on('webrtc_answer', async ({ answer }) => {
+      await pcRef.current?.setRemoteDescription(new RTCSessionDescription(answer))
+    })
+
+    socket.on('ice_candidate', async ({ candidate }) => {
+      try {
+        await pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate))
+      } catch {}
+    })
+
+    socket.on('receive_message', ({ message }) => {
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      setMessages(prev => [...prev, { from: 'them', text: message, time, id: Date.now() + Math.random() }])
+      if (!chatFocused) setUnread(prev => prev + 1)
+    })
+
+    socket.on('message_blocked', () => {
+      systemMessage('Links and contact-sharing are blocked for safety.')
+    })
+
+    socket.on('partner_left', () => {
+      setStatus('partner_left')
+      clearInterval(countdownRef.current)
+      clearInterval(blurRef.current)
+      pcRef.current?.close()
+      if (partnerVideoRef.current) partnerVideoRef.current.srcObject = null
+    })
+
+    socket.on('report_received', () => {
+      setReportSent(true)
+      systemMessage('Report received. Thanks for helping keep Miloo safe.')
+    })
   }
 
   useEffect(() => {
-    let socket
-    const init = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        myStreamRef.current = stream
-        if (myVideoRef.current) myVideoRef.current.srcObject = stream
-      } catch { setStatus('cam_error'); return }
-
-      socket = io(SERVER, { auth: { fingerprint: 'fp_' + Math.random().toString(36).substr(2, 9) } })
-      socketRef.current = socket
-
-      socket.on('connect', () => { setStatus('waiting'); socket.emit('find_match', { mood }) })
-      socket.on('waiting', () => setStatus('waiting'))
-      socket.on('server_busy', () => setStatus('busy'))
-      socket.on('slow_down', ({ waitSeconds }) => {
-        setStatus('slow_down')
-        setTimeout(() => { setStatus('waiting'); socket.emit('find_match', { mood }) }, waitSeconds * 1000)
-      })
-      socket.on('match_found', async ({ partnerId, initiator, starter: s }) => {
-        partnerIdRef.current = partnerId
-        setStarter(s); setStatus('connected'); setGoodSent(false)
-        resetAll(); startDarkRoomTimer()
-        await startPC(initiator, socket, partnerId)
-      })
-      socket.on('webrtc_offer', async ({ offer, from }) => {
-        partnerIdRef.current = from
-        const pc = createPC(socket, from)
-        await pc.setRemoteDescription(new RTCSessionDescription(offer))
-        const answer = await pc.createAnswer()
-        await pc.setLocalDescription(answer)
-        socket.emit('webrtc_answer', { answer, to: from })
-      })
-      socket.on('webrtc_answer', async ({ answer }) => {
-        await pcRef.current?.setRemoteDescription(new RTCSessionDescription(answer))
-      })
-      socket.on('ice_candidate', async ({ candidate }) => {
-        try { await pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate)) } catch {}
-      })
-      socket.on('receive_message', ({ message }) => {
-        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        setMessages(prev => [...prev, { from: 'them', text: message, time, id: Date.now() }])
-        if (!chatFocused) setUnread(prev => prev + 1)
-      })
-      socket.on('message_blocked', () => {
-        setMessages(prev => [...prev, { from: 'system', text: '🚫 Links are not allowed', id: Date.now() }])
-      })
-      socket.on('partner_left', () => {
-        setStatus('partner_left')
-        clearInterval(countdownRef.current); clearInterval(blurRef.current)
-        pcRef.current?.close()
-        if (partnerVideoRef.current) partnerVideoRef.current.srcObject = null
-      })
-      socket.on('report_received', () => {
-        setMessages(prev => [...prev, { from: 'system', text: '✅ Reported', id: Date.now() }])
-      })
-    }
-    init()
     return () => {
-      clearInterval(countdownRef.current); clearInterval(blurRef.current)
+      clearInterval(countdownRef.current)
+      clearInterval(blurRef.current)
       pcRef.current?.close()
-      myStreamRef.current?.getTracks().forEach(t => t.stop())
-      socket?.disconnect()
+      myStreamRef.current?.getTracks().forEach(track => track.stop())
+      socketRef.current?.disconnect()
     }
-  }, [mood])
+  }, [])
 
   function createPC(socket, partnerId) {
     if (pcRef.current) pcRef.current.close()
+
     const pc = new RTCPeerConnection(iceConfig)
     pcRef.current = pc
-    myStreamRef.current?.getTracks().forEach(track => pc.addTrack(track, myStreamRef.current))
-    pc.ontrack = (e) => { if (partnerVideoRef.current) partnerVideoRef.current.srcObject = e.streams[0] }
-    pc.onicecandidate = (e) => { if (e.candidate) socket.emit('ice_candidate', { candidate: e.candidate, to: partnerId }) }
+
+    myStreamRef.current?.getTracks().forEach(track => {
+      pc.addTrack(track, myStreamRef.current)
+    })
+
+    pc.ontrack = event => {
+      if (partnerVideoRef.current) {
+        partnerVideoRef.current.srcObject = event.streams[0]
+      }
+    }
+
+    pc.onicecandidate = event => {
+      if (event.candidate) {
+        socket.emit('ice_candidate', { candidate: event.candidate, to: partnerId })
+      }
+    }
+
     return pc
   }
 
   async function startPC(initiator, socket, partnerId) {
     const pc = createPC(socket, partnerId)
+
     if (initiator) {
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
@@ -174,366 +379,780 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
     }
   }
 
-  function sendMessage() {
-    if (!input.trim() || !partnerIdRef.current) return
+  function toggleMute() {
+    const track = myStreamRef.current?.getAudioTracks()[0]
+    if (track) {
+      track.enabled = !track.enabled
+      setMuted(!track.enabled)
+    }
+  }
+
+  function toggleCam() {
+    const track = myStreamRef.current?.getVideoTracks()[0]
+    if (track) {
+      track.enabled = !track.enabled
+      setCamOff(!track.enabled)
+    }
+  }
+
+  function sendMessage(customText) {
+    const text = typeof customText === 'string' ? customText : input
+    if (!text.trim() || !partnerIdRef.current) return
+
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    socketRef.current.emit('send_message', { message: input, to: partnerIdRef.current })
-    setMessages(prev => [...prev, { from: 'me', text: input, time, id: Date.now() }])
+
+    socketRef.current.emit('send_message', {
+      message: text,
+      to: partnerIdRef.current,
+    })
+
+    setMessages(prev => [...prev, { from: 'me', text, time, id: Date.now() + Math.random() }])
     setInput('')
     inputRef.current?.focus()
   }
 
   function findNext() {
-    clearInterval(countdownRef.current); clearInterval(blurRef.current)
+    clearInterval(countdownRef.current)
+    clearInterval(blurRef.current)
     pcRef.current?.close()
+
     if (partnerVideoRef.current) partnerVideoRef.current.srcObject = null
-    setStatus('waiting'); setStarter('')
+
+    setStatus('waiting')
+    setStarter('')
     resetAll()
-    socketRef.current.emit('find_match', { mood })
+    socketRef.current?.emit('find_match', { mood })
+  }
+
+  function sendPrompt(prompt) {
+    setQuickPrompt(prompt)
+    sendMessage(prompt)
+  }
+
+  function sendGoodConvo() {
+    socketRef.current?.emit('good_convo')
+    setGoodSent(true)
+    systemMessage('Nice. We will use that feedback to improve future matches.')
+  }
+
+  function reportUser() {
+    if (reportSent) return
+    socketRef.current?.emit('report_user')
   }
 
   const partnerFilter = darkRoom ? `blur(${blur}px) brightness(0.3)` : 'none'
-  const myFilter = darkRoom ? 'blur(8px) brightness(0.4)' : camOff ? 'brightness(0.15)' : myBlur ? 'blur(12px) brightness(0.3)' : 'none'
+  const myFilter = darkRoom
+    ? 'blur(8px) brightness(0.4)'
+    : camOff
+      ? 'brightness(0.15)'
+      : myBlur
+        ? 'blur(12px) brightness(0.3)'
+        : 'none'
 
-  // Only show last 4 messages on video
-  const visibleMessages = messages.filter(m => m.from !== 'system').slice(-4)
+  const visibleMessages = messages.filter(message => message.from !== 'system').slice(-4)
 
-  if (status === 'cam_error') return (
-    <Center>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '48px' }}>📷</div>
-        <h3 style={{ color: '#fff', marginTop: '16px' }}>Allow Camera Access</h3>
-        <p style={{ color: '#666', marginTop: '8px', fontSize: '14px' }}>Please allow camera in your browser settings</p>
-        <Btn onClick={onExit} style={{ marginTop: '24px' }}>Go Back</Btn>
-      </div>
-    </Center>
-  )
+  if (status === 'pre_permission') {
+    return (
+      <Center>
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '420px',
+            padding: '26px',
+            borderRadius: '30px',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))',
+            border: '1px solid rgba(255,255,255,0.08)',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ fontSize: '52px', marginBottom: '12px' }}>🎥</div>
+          <h2 style={{ color: '#fff', fontSize: '28px', fontWeight: '900', lineHeight: 1.1 }}>
+            One quick step before matching
+          </h2>
+          <p style={{ color: '#a1a1b1', fontSize: '14px', lineHeight: 1.7, marginTop: '12px' }}>
+            Miloo needs camera and microphone access to start. You can still stay blurred in Safe Mode and reveal only when comfortable.
+          </p>
 
-  if (status === 'busy') return (
-    <Center>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '48px' }}>🔌</div>
-        <h3 style={{ color: '#fff', marginTop: '16px' }}>Server is busy</h3>
-        <p style={{ color: '#666', marginTop: '8px', fontSize: '14px' }}>Please try again in a moment</p>
-        <Btn onClick={onExit} style={{ marginTop: '24px' }}>Go Back</Btn>
-      </div>
-    </Center>
-  )
+          <div
+            style={{
+              marginTop: '18px',
+              display: 'grid',
+              gap: '10px',
+              textAlign: 'left',
+            }}
+          >
+            {[
+              'Camera + mic are needed to join live chat',
+              'Safe Mode keeps your face blurred at the start',
+              'Reveal stays in your control',
+            ].map(item => (
+              <div
+                key={item}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '18px',
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.07)',
+                  color: '#d4d4d8',
+                  fontSize: '13px',
+                }}
+              >
+                {item}
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={initializeMediaAndSocket}
+            style={{
+              marginTop: '20px',
+              width: '100%',
+              padding: '16px 18px',
+              borderRadius: '999px',
+              border: 'none',
+              cursor: 'pointer',
+              background: 'linear-gradient(90deg, #7c3aed, #2563eb)',
+              color: '#fff',
+              fontSize: '16px',
+              fontWeight: '800',
+            }}
+          >
+            Continue
+          </button>
+
+          <button
+            onClick={onExit}
+            style={{
+              marginTop: '10px',
+              background: 'none',
+              border: 'none',
+              color: '#9e9eb0',
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            Go back
+          </button>
+        </div>
+      </Center>
+    )
+  }
+
+  if (status === 'cam_error') {
+    return (
+      <Center>
+        <div style={{ textAlign: 'center', maxWidth: '320px', padding: '24px' }}>
+          <div style={{ fontSize: '50px' }}>📷</div>
+          <h3 style={{ color: '#fff', marginTop: '16px', fontSize: '26px' }}>Camera access is required</h3>
+          <p style={{ color: '#8b8b99', marginTop: '10px', fontSize: '14px', lineHeight: 1.6 }}>
+            Allow camera and microphone permissions in the browser, then try again.
+          </p>
+          <Btn onClick={onExit} style={{ marginTop: '24px' }}>Go Back</Btn>
+        </div>
+      </Center>
+    )
+  }
+
+  if (status === 'busy') {
+    return (
+      <Center>
+        <div style={{ textAlign: 'center', maxWidth: '320px', padding: '24px' }}>
+          <div style={{ fontSize: '50px' }}>🔌</div>
+          <h3 style={{ color: '#fff', marginTop: '16px', fontSize: '26px' }}>Server is busy</h3>
+          <p style={{ color: '#8b8b99', marginTop: '10px', fontSize: '14px', lineHeight: 1.6 }}>
+            Too many people are joining right now. Try again in a moment.
+          </p>
+          <Btn onClick={onExit} style={{ marginTop: '24px' }}>Go Back</Btn>
+        </div>
+      </Center>
+    )
+  }
 
   return (
     <div style={{ height: '100vh', background: '#000', position: 'relative', overflow: 'hidden' }}>
+      <video
+        ref={partnerVideoRef}
+        autoPlay
+        playsInline
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          filter: partnerFilter,
+          transition: 'filter 0.15s ease',
+          background: 'radial-gradient(circle at center, #10101a, #020203)',
+        }}
+      />
 
-      {/* FULL SCREEN VIDEO */}
-      <video ref={partnerVideoRef} autoPlay playsInline style={{
-        position: 'absolute', inset: 0,
-        width: '100%', height: '100%', objectFit: 'cover',
-        filter: partnerFilter, transition: 'filter 0.15s ease'
-      }} />
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(circle at 20% 20%, rgba(124,58,237,0.12), transparent 35%), radial-gradient(circle at 80% 80%, rgba(37,99,235,0.12), transparent 35%)',
+          zIndex: 1,
+          pointerEvents: 'none',
+        }}
+      />
 
-      {/* Dark gradient overlays — top and bottom */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: '120px',
-        background: 'linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)',
-        zIndex: 2, pointerEvents: 'none'
-      }} />
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, height: '200px',
-        background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)',
-        zIndex: 2, pointerEvents: 'none'
-      }} />
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '140px',
+          background: 'linear-gradient(to bottom, rgba(0,0,0,0.78), transparent)',
+          zIndex: 2,
+          pointerEvents: 'none',
+        }}
+      />
 
-      {/* TOP BAR */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px 16px', zIndex: 10
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{
-            fontSize: '20px', fontWeight: '900',
-            background: 'linear-gradient(90deg, #a78bfa, #60a5fa)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
-          }}>miloo</span>
-          {safeMode && (
-            <span style={{
-              fontSize: '10px', color: '#a78bfa',
-              background: 'rgba(167,139,250,0.2)',
-              padding: '2px 8px', borderRadius: '20px',
-              border: '1px solid rgba(167,139,250,0.4)'
-            }}>🛡️ Safe</span>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {status === 'connected' && (
-            <span style={{
-              fontSize: '11px',
-              color: darkRoom ? '#c4b5fd' : '#86efac',
-              background: 'rgba(0,0,0,0.4)',
-              padding: '4px 12px', borderRadius: '20px',
-              backdropFilter: 'blur(10px)',
-              border: `1px solid ${darkRoom ? 'rgba(196,181,253,0.3)' : 'rgba(134,239,172,0.3)'}`
-            }}>
-              {darkRoom ? `🌑 ${countdown}s` : '● Live'}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '240px',
+          background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)',
+          zIndex: 2,
+          pointerEvents: 'none',
+        }}
+      />
+
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          padding: '16px',
+          zIndex: 10,
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span
+              style={{
+                fontSize: '22px',
+                fontWeight: '900',
+                background: 'linear-gradient(90deg, #a78bfa, #60a5fa)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              miloo
             </span>
-          )}
-          <button onClick={onExit} style={{
-            background: 'rgba(0,0,0,0.4)', color: '#ccc',
-            padding: '5px 14px', borderRadius: '20px', backdropFilter: 'blur(10px)',
-            fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer'
-          }}>Exit</button>
+
+            <Pill>{moodMeta.emoji} {moodMeta.label}</Pill>
+            <Pill color="rgba(255,255,255,0.06)" border="rgba(255,255,255,0.1)" text="#ddd6fe">
+              {INTENT_META[intent] || 'Open to anything'}
+            </Pill>
+            {safeMode && <Pill color="rgba(167,139,250,0.18)" border="rgba(167,139,250,0.35)" text="#c4b5fd">🛡 Safe Mode</Pill>}
+          </div>
         </div>
+
+        <button
+          onClick={onExit}
+          style={{
+            background: 'rgba(0,0,0,0.4)',
+            color: '#ddd',
+            padding: '9px 16px',
+            borderRadius: '999px',
+            backdropFilter: 'blur(12px)',
+            fontSize: '13px',
+            fontWeight: '600',
+            border: '1px solid rgba(255,255,255,0.14)',
+            cursor: 'pointer',
+          }}
+        >
+          Exit
+        </button>
       </div>
 
-      {/* WELCOME CARD */}
       {showWelcome && (
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 20,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)'
-        }}>
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(124,58,237,0.25), rgba(37,99,235,0.25))',
-            border: '1px solid rgba(124,58,237,0.4)',
-            borderRadius: '24px', padding: '32px', textAlign: 'center', maxWidth: '300px'
-          }}>
-            <div style={{ fontSize: '52px', marginBottom: '16px' }}>{safeMode ? '🛡️' : '🌑'}</div>
-            <h3 style={{ color: '#fff', fontSize: '20px', fontWeight: '800', marginBottom: '12px' }}>
-              {safeMode ? 'Safe Mode is ON!' : 'Dark Room Mode'}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.84)',
+            backdropFilter: 'blur(22px)',
+            padding: '18px',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '360px',
+              background: 'linear-gradient(135deg, rgba(124,58,237,0.22), rgba(37,99,235,0.22))',
+              border: '1px solid rgba(124,58,237,0.35)',
+              borderRadius: '28px',
+              padding: '28px',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontSize: '52px', marginBottom: '14px' }}>{safeMode ? '🛡️' : '🌑'}</div>
+            <h3 style={{ color: '#fff', fontSize: '22px', fontWeight: '800', marginBottom: '12px' }}>
+              Voice-first start
             </h3>
-            <p style={{ color: '#bbb', fontSize: '14px', lineHeight: 1.7 }}>
-              {safeMode
-                ? <>Your face is <span style={{ color: '#c4b5fd', fontWeight: '700' }}>hidden</span>. Tap <span style={{ color: '#93c5fd', fontWeight: '700' }}>Reveal</span> when ready. ✨</>
-                : <>Talk first, see each other after. Face reveals in <span style={{ color: '#c4b5fd', fontWeight: '700' }}>60 seconds</span>. ✨</>
-              }
+            <p style={{ color: '#c7c7d2', fontSize: '14px', lineHeight: 1.7 }}>
+              Start with conversation, not pressure. Reveal becomes available later, and you stay in control.
             </p>
-            <div style={{
-              marginTop: '16px', padding: '8px 16px',
-              background: 'rgba(124,58,237,0.2)', borderRadius: '50px',
-              color: '#c4b5fd', fontSize: '12px'
-            }}>Not a network issue — this is a feature! 😊</div>
           </div>
         </div>
       )}
 
-      {/* WAITING SCREEN */}
       {(status === 'waiting' || status === 'slow_down' || status === 'partner_left' || status === 'connecting') && (
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 15,
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-          background: 'linear-gradient(135deg, #0a0a0f, #12001f)', gap: '20px'
-        }}>
-          <div style={{
-            width: '80px', height: '80px', borderRadius: '50%',
-            background: 'rgba(124,58,237,0.2)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px'
-          }}>
-            {status === 'partner_left' ? '👋' : '🔍'}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 15,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'linear-gradient(135deg, #09090d, #12001f 60%, #09111f)',
+            padding: '24px',
+          }}
+        >
+          <div
+            style={{
+              width: '94px',
+              height: '94px',
+              borderRadius: '50%',
+              background: 'rgba(124,58,237,0.16)',
+              border: '1px solid rgba(124,58,237,0.28)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '40px',
+            }}
+          >
+            {status === 'partner_left' ? '👋' : '🔎'}
           </div>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ color: '#fff', fontSize: '18px', fontWeight: '700' }}>
-              {status === 'partner_left' ? 'They left the chat' : 'Finding your match...'}
+
+          <div style={{ textAlign: 'center', maxWidth: '360px', marginTop: '22px' }}>
+            <p style={{ color: '#fff', fontSize: '28px', fontWeight: '800', lineHeight: 1.15 }}>
+              {status === 'partner_left' ? 'That chat ended' : 'Finding your match...'}
             </p>
-            <p style={{ color: '#555', fontSize: '13px', marginTop: '6px' }}>
-              {status === 'partner_left' ? 'Hit Next to find someone new' : 'Looking for someone on the same vibe'}
+            <p style={{ color: '#9e9eb0', fontSize: '15px', marginTop: '10px', lineHeight: 1.6 }}>
+              {status === 'partner_left' ? 'Hit next to meet someone new on the same vibe.' : waitingHint}
             </p>
           </div>
-          {status === 'partner_left' && <Btn onClick={findNext}>🔍 Find Someone New</Btn>}
+
+          {status !== 'partner_left' && (
+            <div style={{ marginTop: '18px', display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <Pill>{moodMeta.emoji} {moodMeta.label}</Pill>
+              <Pill>{INTENT_META[intent] || 'Open to anything'}</Pill>
+              <Pill>Waiting {matchSeconds}s</Pill>
+            </div>
+          )}
+
+          {status === 'partner_left' && <Btn onClick={findNext} style={{ marginTop: '24px' }}>Find Someone New</Btn>}
         </div>
       )}
 
-      {/* DARK ROOM VOICE INDICATOR */}
       {status === 'connected' && darkRoom && !showWelcome && (
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 8,
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', gap: '16px'
-        }}>
-          <div style={{ position: 'relative', width: '90px', height: '90px' }}>
-            {[0, 1, 2].map(i => (
-              <div key={i} style={{
-                position: 'absolute', inset: 0, borderRadius: '50%',
-                border: '2px solid rgba(124,58,237,0.5)',
-                animation: `pulse ${1.2 + i * 0.4}s ease-out infinite`,
-                animationDelay: `${i * 0.3}s`
-              }} />
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 8,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '16px',
+            padding: '20px',
+          }}
+        >
+          <div style={{ position: 'relative', width: '94px', height: '94px' }}>
+            {[0, 1, 2].map(index => (
+              <div
+                key={index}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  borderRadius: '50%',
+                  border: '2px solid rgba(124,58,237,0.5)',
+                  animation: `pulse ${1.2 + index * 0.4}s ease-out infinite`,
+                  animationDelay: `${index * 0.3}s`,
+                }}
+              />
             ))}
-            <div style={{
-              position: 'absolute', inset: '18px', borderRadius: '50%',
-              background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px'
-            }}>🎤</div>
+            <div
+              style={{
+                position: 'absolute',
+                inset: '18px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '23px',
+              }}
+            >
+              🎤
+            </div>
           </div>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ color: '#fff', fontSize: '16px', fontWeight: '700' }}>
-              Voice only — Face reveals in {countdown}s
+
+          <div style={{ textAlign: 'center', maxWidth: '360px' }}>
+            <p style={{ color: '#fff', fontSize: '19px', fontWeight: '800' }}>
+              Voice-first mode {countdown > 0 ? `• reveal in ${countdown}s` : '• reveal available'}
             </p>
-            <p style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>Talk first, see each other after 👀</p>
+            <p style={{ color: '#9a9aae', fontSize: '13px', marginTop: '6px', lineHeight: 1.6 }}>
+              Better chats start with less pressure and more intent.
+            </p>
           </div>
-          <button onClick={skipDarkRoom} style={{
-            background: 'rgba(255,255,255,0.08)',
-            border: '1px solid rgba(255,255,255,0.15)',
-            color: '#888', fontSize: '12px', padding: '6px 18px',
-            borderRadius: '20px', cursor: 'pointer', backdropFilter: 'blur(10px)'
-          }}>Reveal now →</button>
+
+          <div
+            style={{
+              maxWidth: '380px',
+              width: '100%',
+              background: 'rgba(0,0,0,0.46)',
+              backdropFilter: 'blur(12px)',
+              borderRadius: '18px',
+              border: '1px solid rgba(255,255,255,0.1)',
+              padding: '14px',
+            }}
+          >
+            <div style={{ color: '#c4b5fd', fontSize: '12px', fontWeight: '700', marginBottom: '8px' }}>
+              Starter idea
+            </div>
+            <div style={{ color: '#fff', fontSize: '14px', lineHeight: 1.6 }}>
+              {quickPrompt}
+            </div>
+          </div>
+
+          {myRevealReady && (
+            <button
+              onClick={unlockReveal}
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.16)',
+                color: '#ddd',
+                fontSize: '13px',
+                fontWeight: '600',
+                padding: '9px 18px',
+                borderRadius: '999px',
+                cursor: 'pointer',
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              Reveal myself
+            </button>
+          )}
         </div>
       )}
 
-      {/* FACE REVEAL TOAST */}
-      {revealed && (
-        <div style={{
-          position: 'absolute', top: '70px', left: '50%',
-          transform: 'translateX(-50%)', zIndex: 15,
-          background: 'linear-gradient(90deg, #7c3aed, #2563eb)',
-          padding: '10px 24px', borderRadius: '50px',
-          fontSize: '14px', fontWeight: '700', color: '#fff',
-          boxShadow: '0 4px 30px rgba(124,58,237,0.5)',
-          animation: 'fadeOut 3s forwards'
-        }}>✨ Face revealed! Say hi!</div>
+      {status === 'connected' && !darkRoom && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '84px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            alignItems: 'center',
+            width: 'min(92vw, 480px)',
+          }}
+        >
+          {starter && (
+            <div
+              style={{
+                background: 'rgba(0,0,0,0.52)',
+                backdropFilter: 'blur(12px)',
+                padding: '9px 16px',
+                borderRadius: '999px',
+                fontSize: '13px',
+                fontWeight: '600',
+                color: '#fff',
+                maxWidth: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                border: '1px solid rgba(255,255,255,0.09)',
+              }}
+            >
+              {starter}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            {moodMeta.prompts.slice(0, 3).map(prompt => (
+              <button
+                key={prompt}
+                onClick={() => sendPrompt(prompt)}
+                style={{
+                  background: 'rgba(0,0,0,0.42)',
+                  color: '#ececf3',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '999px',
+                  padding: '8px 12px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(10px)',
+                }}
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* CONVO STARTER */}
-      {status === 'connected' && !darkRoom && starter && !revealed && (
-        <div style={{
-          position: 'absolute', top: '65px', left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(12px)',
-          padding: '8px 18px', borderRadius: '50px',
-          fontSize: '13px', fontWeight: '600', color: '#fff', zIndex: 10,
-          whiteSpace: 'nowrap', maxWidth: '85vw', overflow: 'hidden', textOverflow: 'ellipsis',
-          border: '1px solid rgba(255,255,255,0.1)'
-        }}>{starter}</div>
-      )}
+      <div style={{ position: 'absolute', bottom: '118px', right: '12px', zIndex: 10 }}>
+        <video
+          ref={myVideoRef}
+          autoPlay
+          muted
+          playsInline
+          style={{
+            width: '96px',
+            height: '126px',
+            objectFit: 'cover',
+            borderRadius: '16px',
+            border: `2px solid ${myBlur && !darkRoom ? 'rgba(196,181,253,0.75)' : camOff ? 'rgba(239,68,68,0.7)' : 'rgba(124,58,237,0.75)'}`,
+            filter: myFilter,
+            transition: 'all 0.3s ease',
+            boxShadow: '0 10px 32px rgba(0,0,0,0.6)',
+            background: '#111118',
+          }}
+        />
 
-      {/* MY VIDEO — bottom right */}
-      <div style={{
-        position: 'absolute', bottom: '100px', right: '12px', zIndex: 10
-      }}>
-        <video ref={myVideoRef} autoPlay muted playsInline style={{
-          width: '90px', height: '120px', objectFit: 'cover',
-          borderRadius: '14px',
-          border: `2px solid ${myBlur && !darkRoom ? 'rgba(196,181,253,0.7)' : camOff ? 'rgba(239,68,68,0.7)' : 'rgba(124,58,237,0.7)'}`,
-          filter: myFilter, transition: 'all 0.3s ease',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.6)'
-        }} />
         {safeMode && !darkRoom && (
-          <button onClick={() => setMyBlur(!myBlur)} style={{
-            position: 'absolute', bottom: '-10px', left: '50%', transform: 'translateX(-50%)',
-            background: myBlur ? 'rgba(167,139,250,0.9)' : 'rgba(74,222,128,0.9)',
-            color: '#fff', border: 'none', borderRadius: '50px',
-            fontSize: '9px', fontWeight: '800', padding: '3px 10px',
-            cursor: 'pointer', whiteSpace: 'nowrap'
-          }}>
-            {myBlur ? '👁 Reveal' : '🛡 Hide'}
+          <button
+            onClick={() => setMyBlur(!myBlur)}
+            style={{
+              position: 'absolute',
+              bottom: '-10px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: myBlur ? 'rgba(167,139,250,0.95)' : 'rgba(74,222,128,0.95)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '999px',
+              fontSize: '10px',
+              fontWeight: '800',
+              padding: '4px 11px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {myBlur ? 'Reveal me' : 'Hide me'}
           </button>
         )}
       </div>
 
-      {/* FLOATING MESSAGES — video ke upar, bottom left */}
       {status === 'connected' && !darkRoom && visibleMessages.length > 0 && (
-        <div style={{
-          position: 'absolute', bottom: '100px', left: '12px',
-          zIndex: 10, display: 'flex', flexDirection: 'column',
-          gap: '6px', maxWidth: 'calc(100% - 120px)'
-        }}>
-          {visibleMessages.map((m, i) => (
-            <div key={m.id || i} style={{
-              display: 'inline-flex', alignItems: 'flex-start', gap: '6px',
-              animation: 'msgPop 0.2s ease',
-              opacity: i === visibleMessages.length - 1 ? 1 : 0.5 + (i * 0.15)
-            }}>
-              <span style={{
-                fontSize: '10px', fontWeight: '800',
-                color: m.from === 'me' ? '#c4b5fd' : '#93c5fd',
-                marginTop: '2px', flexShrink: 0
-              }}>
-                {m.from === 'me' ? 'You' : 'Them'}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '118px',
+            left: '12px',
+            zIndex: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+            maxWidth: 'calc(100% - 132px)',
+          }}
+        >
+          {visibleMessages.map((message, index) => (
+            <div
+              key={message.id || index}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'flex-start',
+                gap: '6px',
+                animation: 'msgPop 0.2s ease',
+                opacity: index === visibleMessages.length - 1 ? 1 : 0.58 + index * 0.12,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: '800',
+                  color: message.from === 'me' ? '#c4b5fd' : '#93c5fd',
+                  marginTop: '2px',
+                  flexShrink: 0,
+                }}
+              >
+                {message.from === 'me' ? 'You' : 'Them'}
               </span>
-              <div style={{
-                background: 'rgba(0,0,0,0.55)',
-                backdropFilter: 'blur(12px)',
-                color: '#fff', padding: '6px 12px',
-                borderRadius: m.from === 'me' ? '14px 14px 14px 4px' : '14px 14px 4px 14px',
-                fontSize: '13px', lineHeight: 1.4,
-                border: '1px solid rgba(255,255,255,0.08)',
-                maxWidth: '200px', wordBreak: 'break-word'
-              }}>
-                {m.text}
+
+              <div
+                style={{
+                  background: 'rgba(0,0,0,0.58)',
+                  backdropFilter: 'blur(12px)',
+                  color: '#fff',
+                  padding: '7px 12px',
+                  borderRadius: message.from === 'me' ? '14px 14px 14px 4px' : '14px 14px 4px 14px',
+                  fontSize: '13px',
+                  lineHeight: 1.42,
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  maxWidth: '220px',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {message.text}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* BOTTOM CONTROLS */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        zIndex: 10, padding: '12px 16px 20px'
-      }}>
-        {/* Chat input */}
-        <div style={{
-          display: 'flex', gap: '8px', marginBottom: '12px',
-          background: 'rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(16px)',
-          borderRadius: '50px', padding: '6px 6px 6px 16px',
-          border: '1px solid rgba(255,255,255,0.1)'
-        }}>
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 10,
+          padding: '12px 16px 20px',
+        }}
+      >
+        {messages.some(message => message.from === 'system') && (
+          <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'center' }}>
+            <div
+              style={{
+                background: 'rgba(0,0,0,0.4)',
+                color: '#c8c8d1',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '999px',
+                padding: '8px 12px',
+                fontSize: '12px',
+                maxWidth: '100%',
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              {messages.filter(message => message.from === 'system').slice(-1)[0]?.text}
+            </div>
+          </div>
+        )}
+
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '12px',
+            background: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(16px)',
+            borderRadius: '999px',
+            padding: '6px 6px 6px 16px',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+        >
           <input
             ref={inputRef}
             value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && sendMessage()}
-            onFocus={() => { setChatFocused(true); setUnread(0) }}
+            onChange={event => setInput(event.target.value)}
+            onKeyDown={event => event.key === 'Enter' && sendMessage()}
+            onFocus={() => {
+              setChatFocused(true)
+              setUnread(0)
+            }}
             onBlur={() => setChatFocused(false)}
-            placeholder={darkRoom ? '🌑 Voice only mode...' : 'Say something...'}
+            placeholder={darkRoom ? 'Start with something real...' : 'Send a message...'}
             style={{
-              flex: 1, background: 'none', border: 'none',
-              color: '#fff', fontSize: '14px', outline: 'none',
-              '::placeholder': { color: '#666' }
+              flex: 1,
+              background: 'none',
+              border: 'none',
+              color: '#fff',
+              fontSize: '14px',
+              outline: 'none',
             }}
           />
+
           {unread > 0 && (
-            <span style={{
-              background: '#ef4444', color: '#fff',
-              borderRadius: '50px', padding: '2px 8px',
-              fontSize: '11px', fontWeight: '800',
-              alignSelf: 'center', flexShrink: 0
-            }}>{unread} new</span>
+            <span
+              style={{
+                background: '#ef4444',
+                color: '#fff',
+                borderRadius: '999px',
+                padding: '2px 8px',
+                fontSize: '11px',
+                fontWeight: '800',
+                alignSelf: 'center',
+                flexShrink: 0,
+              }}
+            >
+              {unread} new
+            </span>
           )}
-          <button onClick={sendMessage} style={{
-            background: input.trim() ? 'linear-gradient(90deg, #7c3aed, #2563eb)' : 'rgba(255,255,255,0.1)',
-            color: '#fff', border: 'none', borderRadius: '50%',
-            width: '36px', height: '36px', fontSize: '16px',
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'background 0.2s', flexShrink: 0
-          }}>↑</button>
+
+          <button
+            onClick={() => sendMessage()}
+            style={{
+              background: input.trim() ? 'linear-gradient(90deg, #7c3aed, #2563eb)' : 'rgba(255,255,255,0.1)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '50%',
+              width: '38px',
+              height: '38px',
+              fontSize: '16px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            ↑
+          </button>
         </div>
 
-        {/* Action buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <GlassBtn onClick={toggleMute} active={muted} activeColor="rgba(239,68,68,0.4)">
               {muted ? '🔇' : '🎤'}
             </GlassBtn>
+
             <GlassBtn onClick={toggleCam} active={camOff} activeColor="rgba(239,68,68,0.4)">
               {camOff ? '📵' : '📹'}
             </GlassBtn>
-            <GlassBtn onClick={() => socketRef.current?.emit('report_user')}>
-              🚩
+
+            <GlassBtn onClick={reportUser} active={reportSent} activeColor="rgba(239,68,68,0.35)">
+              {reportSent ? '✅' : '🚩'}
             </GlassBtn>
-            <GlassBtn
-              onClick={() => { socketRef.current?.emit('good_convo'); setGoodSent(true) }}
-              active={goodSent} activeColor="rgba(74,222,128,0.3)">
+
+            <GlassBtn onClick={sendGoodConvo} active={goodSent} activeColor="rgba(74,222,128,0.3)">
               {goodSent ? '✅' : '👍'}
             </GlassBtn>
           </div>
 
-          <button onClick={findNext} style={{
-            background: 'linear-gradient(90deg, #7c3aed, #2563eb)',
-            color: '#fff', border: 'none', borderRadius: '50px',
-            padding: '10px 22px', fontSize: '14px', fontWeight: '700',
-            cursor: 'pointer', boxShadow: '0 4px 15px rgba(124,58,237,0.4)'
-          }}>Next ⏭</button>
+          <button
+            onClick={findNext}
+            style={{
+              background: 'linear-gradient(90deg, #7c3aed, #2563eb)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '999px',
+              padding: '11px 22px',
+              fontSize: '14px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              boxShadow: '0 4px 20px rgba(124,58,237,0.38)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Next ⏭
+          </button>
         </div>
+
+        <div ref={messagesEndRef} />
       </div>
 
       <style>{`
@@ -541,44 +1160,103 @@ export default function ChatRoom({ mood, safeMode, onExit }) {
           0% { transform: scale(1); opacity: 0.8; }
           100% { transform: scale(2.5); opacity: 0; }
         }
-        @keyframes fadeOut {
-          0% { opacity: 1; }
-          70% { opacity: 1; }
-          100% { opacity: 0; }
-        }
         @keyframes msgPop {
           from { transform: translateY(8px); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
         }
-        input::placeholder { color: #555; }
+        input::placeholder {
+          color: #6b6b78;
+        }
       `}</style>
     </div>
   )
 }
 
 function Center({ children }) {
-  return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a0f' }}>{children}</div>
+  return (
+    <div
+      style={{
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #09090d, #12001f 60%, #09111f)',
+        padding: '20px',
+      }}
+    >
+      {children}
+    </div>
+  )
 }
 
 function Btn({ children, onClick, style = {} }) {
   return (
-    <button onClick={onClick} style={{
-      background: 'linear-gradient(90deg, #7c3aed, #2563eb)', color: '#fff',
-      padding: '10px 20px', borderRadius: '50px', fontSize: '14px',
-      fontWeight: '600', border: 'none', cursor: 'pointer', ...style
-    }}>{children}</button>
+    <button
+      onClick={onClick}
+      style={{
+        background: 'linear-gradient(90deg, #7c3aed, #2563eb)',
+        color: '#fff',
+        padding: '11px 22px',
+        borderRadius: '999px',
+        fontSize: '14px',
+        fontWeight: '700',
+        border: 'none',
+        cursor: 'pointer',
+        ...style,
+      }}
+    >
+      {children}
+    </button>
   )
 }
 
 function GlassBtn({ children, onClick, active, activeColor }) {
   return (
-    <button onClick={onClick} style={{
-      background: active ? activeColor : 'rgba(0,0,0,0.45)',
-      color: '#fff', width: '40px', height: '40px', borderRadius: '50%',
-      fontSize: '17px', border: '1px solid rgba(255,255,255,0.12)',
-      cursor: 'pointer', backdropFilter: 'blur(10px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      transition: 'all 0.2s'
-    }}>{children}</button>
+    <button
+      onClick={onClick}
+      style={{
+        background: active ? activeColor : 'rgba(0,0,0,0.45)',
+        color: '#fff',
+        width: '42px',
+        height: '42px',
+        borderRadius: '50%',
+        fontSize: '17px',
+        border: '1px solid rgba(255,255,255,0.12)',
+        cursor: 'pointer',
+        backdropFilter: 'blur(10px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function Pill({
+  children,
+  color = 'rgba(255,255,255,0.06)',
+  border = 'rgba(255,255,255,0.1)',
+  text = '#f4f4f5',
+}) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        background: color,
+        color: text,
+        border: `1px solid ${border}`,
+        borderRadius: '999px',
+        padding: '6px 10px',
+        fontSize: '11px',
+        fontWeight: '700',
+        backdropFilter: 'blur(10px)',
+      }}
+    >
+      {children}
+    </span>
   )
 }
