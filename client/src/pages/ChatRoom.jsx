@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 
-const SERVER = 'http://localhost:3001'
+const SERVER =
+  window.location.hostname === 'localhost'
+    ? 'http://localhost:3001'
+    : 'https://rcapp-server.onrender.com'
+
 
 const iceConfig = {
   iceServers: [
