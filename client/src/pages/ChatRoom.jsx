@@ -136,6 +136,7 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
   const inputRef = useRef(null)
   const waitingHintRef = useRef(null)
   const waitingTimerRef = useRef(null)
+  const candidateQueueRef = useRef([])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -236,22 +237,48 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
     })
 
     socket.on('webrtc_offer', async ({ offer, from }) => {
-      partnerIdRef.current = from
-      const pc = createPC(socket, from)
-      await pc.setRemoteDescription(new RTCSessionDescription(offer))
-      const answer = await pc.createAnswer()
-      await pc.setLocalDescription(answer)
-      socket.emit('webrtc_answer', { answer, to: from })
+      try {
+        partnerIdRef.current = from
+        const pc = createPC(socket, from)
+        await pc.setRemoteDescription(new RTCSessionDescription(offer))
+        
+        while (candidateQueueRef.current.length > 0) {
+          const cand = candidateQueueRef.current.shift()
+          await pc.addIceCandidate(new RTCIceCandidate(cand))
+        }
+
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        socket.emit('webrtc_answer', { answer, to: from })
+      } catch (err) {
+        console.error('Offer error', err)
+      }
     })
 
     socket.on('webrtc_answer', async ({ answer }) => {
-      await pcRef.current?.setRemoteDescription(new RTCSessionDescription(answer))
+      try {
+        if (pcRef.current) {
+          await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer))
+          while (candidateQueueRef.current.length > 0) {
+            const cand = candidateQueueRef.current.shift()
+            await pcRef.current.addIceCandidate(new RTCIceCandidate(cand))
+          }
+        }
+      } catch (err) {
+        console.error('Answer error', err)
+      }
     })
 
     socket.on('ice_candidate', async ({ candidate }) => {
       try {
-        await pcRef.current?.addIceCandidate(new RTCIceCandidate(candidate))
-      } catch {}
+        if (pcRef.current && pcRef.current.remoteDescription) {
+          await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate))
+        } else {
+          candidateQueueRef.current.push(candidate)
+        }
+      } catch (err) {
+        console.error('ICE candidate error', err)
+      }
     })
 
     socket.on('receive_message', ({ message }) => {
@@ -277,10 +304,13 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
   }
 
   function createPC(socket, partnerId) {
-    if (pcRef.current) pcRef.current.close()
+    if (pcRef.current && pcRef.current.signalingState !== 'closed') {
+      return pcRef.current
+    }
 
     const pc = new RTCPeerConnection(iceConfig)
     pcRef.current = pc
+    candidateQueueRef.current = []
 
     myStreamRef.current?.getTracks().forEach(track => {
       pc.addTrack(track, myStreamRef.current)
@@ -288,7 +318,12 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
 
     pc.ontrack = event => {
       if (partnerVideoRef.current) {
-        partnerVideoRef.current.srcObject = event.streams[0]
+        if (event.streams && event.streams[0]) {
+          partnerVideoRef.current.srcObject = event.streams[0]
+        } else {
+          partnerVideoRef.current.srcObject = new MediaStream([event.track])
+        }
+        partnerVideoRef.current.play().catch(() => {})
       }
     }
 
@@ -344,7 +379,10 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
   }
 
   function findNext() {
-    pcRef.current?.close()
+    if (pcRef.current) {
+      pcRef.current.close()
+      pcRef.current = null
+    }
 
     if (partnerVideoRef.current) partnerVideoRef.current.srcObject = null
 
