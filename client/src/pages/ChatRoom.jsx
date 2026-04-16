@@ -318,12 +318,24 @@ export default function ChatRoom({ mood, intent, safeMode, onExit }) {
 
     pc.ontrack = event => {
       if (partnerVideoRef.current) {
-        if (event.streams && event.streams[0]) {
-          partnerVideoRef.current.srcObject = event.streams[0]
+        // Use the first stream provided, or create a new one if none exist
+        const stream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track])
+        
+        // If we already have a srcObject and it's a MediaStream, just add the new track to it
+        // Otherwise, set the whole stream as the srcObject
+        if (partnerVideoRef.current.srcObject && partnerVideoRef.current.srcObject instanceof MediaStream) {
+          // Check if track is already in the stream to avoid duplicates
+          if (!partnerVideoRef.current.srcObject.getTracks().find(t => t.id === event.track.id)) {
+            partnerVideoRef.current.srcObject.addTrack(event.track)
+          }
         } else {
-          partnerVideoRef.current.srcObject = new MediaStream([event.track])
+          partnerVideoRef.current.srcObject = stream
         }
-        partnerVideoRef.current.play().catch(() => {})
+
+        // Explicitly trigger play to handle browser autoplay policies
+        partnerVideoRef.current.play().catch(err => {
+          console.warn('Auto-play blocked or failed:', err)
+        })
       }
     }
 
