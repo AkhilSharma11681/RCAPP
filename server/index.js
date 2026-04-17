@@ -338,9 +338,10 @@ io.on("connection", socket => {
 
   console.log(`Connected: ${socket.id}`);
 
-  socket.on("find_match", ({ mood, intent }) => {
+  socket.on("find_match", ({ mood, intent, textOnly }) => {
     const selectedMood = typeof mood === "string" ? mood : "any";
     const selectedIntent = typeof intent === "string" ? intent : "random";
+    const isTextOnly = textOnly === true;
 
     removeFromQueues(socket.id);
 
@@ -360,6 +361,7 @@ io.on("connection", socket => {
       ...meta,
       lastMood: selectedMood,
       lastIntent: selectedIntent,
+      textOnly: isTextOnly,
     });
 
     const partnerId = findMatch(socket.id);
@@ -384,7 +386,7 @@ io.on("connection", socket => {
       updateTrust(socket.id, +1);
       updateTrust(partnerId, +1);
 
-      console.log(`Matched: ${socket.id} ↔ ${partnerId} | broad-match`);
+      console.log(`Matched: ${socket.id} ↔ ${partnerId} | ${isTextOnly ? "text" : "video"}`);
     } else {
       queueUser(socket.id, selectedMood, selectedIntent);
       socket.emit("waiting");
@@ -423,6 +425,12 @@ io.on("connection", socket => {
     }
 
     io.to(to).emit("receive_message", { message: clean });
+  });
+
+  socket.on("typing", ({ to }) => {
+    if (!activePairs.has(socket.id)) return;
+    if (activePairs.get(socket.id) !== to) return;
+    io.to(to).emit("partner_typing");
   });
 
   socket.on("good_convo", () => {
