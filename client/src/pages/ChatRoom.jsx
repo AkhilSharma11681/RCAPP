@@ -604,7 +604,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     const systemMsg = messages.filter(m => m.from === 'system').slice(-1)[0]
 
     return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-0)' }}>
+      <div className="chat-room" style={{ background: 'var(--bg-0)' }}>
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -964,9 +964,9 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
           }}
         >
           <div style={{
-            width: '94px', height: '94px', borderRadius: '50%',
-            background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.22)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px',
+            width: '80px', height: '80px', borderRadius: '50%',
+            background: 'var(--accent-dim)', border: '1px solid var(--accent-border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px',
           }}>
             {status === 'partner_left' ? '👋' : '🔎'}
           </div>
@@ -1324,9 +1324,9 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
 function Center({ children }) {
   return (
     <div style={{
-      height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'var(--bg-0)',
-      padding: '20px',
+      height: '100vh', height: '100dvh',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'var(--bg-0)', padding: '20px',
     }}>
       {children}
     </div>

@@ -20,30 +20,38 @@ export default function MoodSelect({ onContinue, onBack, theme, onToggleTheme })
   }
 
   return (
-    <div className="page-enter" style={{
-      minHeight: '100vh', display: 'flex', flexDirection: 'column',
-      background: 'var(--bg-0)', overflow: 'hidden auto',
-    }}>
+    <div className="page-scroll page-enter" style={{ background: 'var(--bg-0)', minHeight: '100vh' }}>
+
+      {/* ── Navbar ── */}
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '18px 32px', borderBottom: '1px solid var(--border-1)',
-        flexShrink: 0, position: 'sticky', top: 0, zIndex: 20, background: 'var(--bg-0)',
+        padding: '16px 24px', borderBottom: '1px solid var(--border-1)',
+        position: 'sticky', top: 0, zIndex: 20, background: 'var(--bg-0)',
       }}>
         <button onClick={onBack} style={{
           background: 'none', border: 'none', cursor: 'pointer',
           color: 'var(--text-3)', fontSize: '14px', fontWeight: '600',
-          display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0',
+          display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 0',
         }}>← Back</button>
-        <span style={{ fontSize: '20px', fontWeight: '900', letterSpacing: '-0.06em', color: 'var(--text-1)' }}>miloo</span>
+        <span style={{ fontSize: '18px', fontWeight: '900', letterSpacing: '-0.06em', color: 'var(--text-1)' }}>
+          miloo
+        </span>
         <ThemeToggle theme={theme} onToggle={onToggleTheme} />
       </nav>
 
+      {/* ── Content ── */}
       <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-        padding: '52px 24px 48px', maxWidth: '540px', margin: '0 auto', width: '100%', gap: '36px',
+        maxWidth: '520px', margin: '0 auto',
+        padding: '40px 20px 60px',
+        display: 'flex', flexDirection: 'column', gap: '32px',
       }}>
+
+        {/* Header */}
         <div style={{ textAlign: 'center' }}>
-          <h2 style={{ color: 'var(--text-1)', fontSize: 'clamp(26px, 5vw, 38px)', fontWeight: '800', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '10px' }}>
+          <h2 style={{
+            color: 'var(--text-1)', fontSize: 'clamp(24px, 5vw, 36px)',
+            fontWeight: '800', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '10px',
+          }}>
             What's your vibe?
           </h2>
           <p style={{ color: 'var(--text-3)', fontSize: '15px', lineHeight: 1.65 }}>
@@ -51,7 +59,8 @@ export default function MoodSelect({ onContinue, onBack, theme, onToggleTheme })
           </p>
         </div>
 
-        <div style={{ width: '100%' }}>
+        {/* Chat mode */}
+        <div>
           <p style={{ color: 'var(--text-3)', fontSize: '11px', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>
             How do you want to chat?
           </p>
@@ -61,51 +70,68 @@ export default function MoodSelect({ onContinue, onBack, theme, onToggleTheme })
               { id: 'video', icon: '🎥', label: 'Video Chat', sub: 'Face to face.' },
             ].map(m => (
               <button key={m.id} onClick={() => setChatMode(m.id)} style={{
-                padding: '18px 14px', borderRadius: '16px', border: 'none', cursor: 'pointer', textAlign: 'left',
+                padding: '18px 14px', borderRadius: '16px', border: 'none',
+                cursor: 'pointer', textAlign: 'left',
                 background: chatMode === m.id ? 'var(--accent)' : 'var(--bg-2)',
                 outline: chatMode === m.id ? 'none' : '1px solid var(--border-1)',
-                transition: 'all 0.15s ease',
-                transform: chatMode === m.id ? 'scale(1.01)' : 'scale(1)',
                 boxShadow: chatMode === m.id ? 'var(--accent-glow)' : 'none',
+                transition: 'all 0.15s ease',
               }}>
-                <div style={{ fontSize: '24px', marginBottom: '8px' }}>{m.icon}</div>
-                <div style={{ color: chatMode === m.id ? '#fff' : 'var(--text-1)', fontSize: '14px', fontWeight: '700', marginBottom: '3px' }}>{m.label}</div>
-                <div style={{ color: chatMode === m.id ? 'rgba(255,255,255,0.6)' : 'var(--text-3)', fontSize: '12px', lineHeight: 1.4 }}>{m.sub}</div>
+                <div style={{ fontSize: '26px', marginBottom: '8px' }}>{m.icon}</div>
+                <div style={{
+                  color: chatMode === m.id ? 'var(--accent-text)' : 'var(--text-1)',
+                  fontSize: '14px', fontWeight: '700', marginBottom: '3px',
+                }}>{m.label}</div>
+                <div style={{
+                  color: chatMode === m.id ? 'rgba(255,255,255,0.6)' : 'var(--text-3)',
+                  fontSize: '12px', lineHeight: 1.4,
+                }}>{m.sub}</div>
               </button>
             ))}
           </div>
         </div>
 
-        <div style={{ width: '100%' }}>
+        {/* Mood grid */}
+        <div>
           <p style={{ color: 'var(--text-3)', fontSize: '11px', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px' }}>
             Pick your mood
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '10px' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+            gap: '10px',
+          }}>
             {moods.map(mood => (
               <button key={mood.id} onClick={() => setSelectedMood(mood.id)} style={{
-                padding: '18px 14px', borderRadius: '16px', border: 'none', cursor: 'pointer', textAlign: 'left',
+                padding: '18px 14px', borderRadius: '16px', border: 'none',
+                cursor: 'pointer', textAlign: 'left',
                 background: selectedMood === mood.id ? 'var(--accent-dim)' : 'var(--bg-2)',
-                outline: selectedMood === mood.id ? '2px solid var(--accent-border)' : '1px solid var(--border-1)',
+                outline: selectedMood === mood.id
+                  ? '2px solid var(--accent-border)'
+                  : '1px solid var(--border-1)',
                 transition: 'all 0.13s ease',
-                transform: selectedMood === mood.id ? 'scale(1.01)' : 'scale(1)',
               }}>
-                <div style={{ fontSize: '24px', marginBottom: '8px' }}>{mood.emoji}</div>
-                <div style={{ color: selectedMood === mood.id ? 'var(--accent)' : 'var(--text-1)', fontSize: '13px', fontWeight: '700', marginBottom: '3px' }}>{mood.label}</div>
+                <div style={{ fontSize: '26px', marginBottom: '8px' }}>{mood.emoji}</div>
+                <div style={{
+                  color: selectedMood === mood.id ? 'var(--accent)' : 'var(--text-1)',
+                  fontSize: '13px', fontWeight: '700', marginBottom: '3px',
+                }}>{mood.label}</div>
                 <div style={{ color: 'var(--text-3)', fontSize: '11px', lineHeight: 1.4 }}>{mood.desc}</div>
               </button>
             ))}
           </div>
         </div>
 
-        <div style={{ width: '100%' }}>
-          <button onClick={handleContinue} style={{
-            width: '100%', padding: '18px', borderRadius: '999px', border: 'none', cursor: 'pointer',
-            background: 'var(--accent)', color: 'var(--accent-text)',
-            fontSize: '16px', fontWeight: '700', boxShadow: 'var(--accent-glow)', letterSpacing: '-0.01em',
-          }}>
-            {chatMode === 'text' ? 'Find Someone to Chat With →' : 'Find My Match →'}
-          </button>
-        </div>
+        {/* CTA */}
+        <button onClick={handleContinue} style={{
+          width: '100%', padding: '18px', borderRadius: '999px', border: 'none',
+          cursor: 'pointer', background: 'var(--accent)', color: 'var(--accent-text)',
+          fontSize: '16px', fontWeight: '700',
+          boxShadow: 'var(--accent-glow)', letterSpacing: '-0.01em',
+        }}>
+          {chatMode === 'text' ? 'Find Someone to Chat With →' : 'Find My Match →'}
+        </button>
+
       </div>
     </div>
   )
