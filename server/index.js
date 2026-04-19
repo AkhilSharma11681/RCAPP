@@ -338,10 +338,11 @@ io.on("connection", socket => {
 
   console.log(`Connected: ${socket.id}`);
 
-  socket.on("find_match", ({ mood, intent, textOnly }) => {
+  socket.on("find_match", ({ mood, intent, textOnly, mediaMode }) => {
     const selectedMood = typeof mood === "string" ? mood : "any";
     const selectedIntent = typeof intent === "string" ? intent : "random";
     const isTextOnly = textOnly === true;
+    const safeMediaMode = ["video", "audio", "text"].includes(mediaMode) ? mediaMode : "text";
 
     removeFromQueues(socket.id);
 
@@ -362,6 +363,7 @@ io.on("connection", socket => {
       lastMood: selectedMood,
       lastIntent: selectedIntent,
       textOnly: isTextOnly,
+      mediaMode: safeMediaMode,
     });
 
     const partnerId = findMatch(socket.id);
@@ -370,23 +372,27 @@ io.on("connection", socket => {
       createPair(socket.id, partnerId, "any");
 
       const starter = getStarterForMood(selectedMood);
+      const myMode = getUserMeta(socket.id)?.mediaMode ?? "text";
+      const partnerMode = getUserMeta(partnerId)?.mediaMode ?? "text";
 
       io.to(socket.id).emit("match_found", {
         partnerId,
         initiator: true,
         starter,
+        partnerMediaMode: partnerMode,
       });
 
       io.to(partnerId).emit("match_found", {
         partnerId: socket.id,
         initiator: false,
         starter,
+        partnerMediaMode: myMode,
       });
 
       updateTrust(socket.id, +1);
       updateTrust(partnerId, +1);
 
-      console.log(`Matched: ${socket.id} ↔ ${partnerId} | ${isTextOnly ? "text" : "video"}`);
+      console.log(`Matched: ${socket.id} ↔ ${partnerId} | ${myMode} ↔ ${partnerMode}`);
     } else {
       queueUser(socket.id, selectedMood, selectedIntent);
       socket.emit("waiting");

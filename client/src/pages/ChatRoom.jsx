@@ -127,6 +127,8 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   const [quickPrompt, setQuickPrompt] = useState(randomFrom(moodMeta.prompts))
   const [reportSent, setReportSent] = useState(false)
   const [partnerTyping, setPartnerTyping] = useState(false)
+  const [myMediaMode, setMyMediaMode] = useState('text')
+  const [partnerMediaMode, setPartnerMediaMode] = useState(null)
 
   const socketRef = useRef(null)
   const pcRef = useRef(null)
@@ -140,6 +142,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   const waitingTimerRef = useRef(null)
   const candidateQueueRef = useRef([])
   const typingTimeoutRef = useRef(null)
+  const mediaModeRef = useRef('text')
 
   function emitTyping() {
     if (!partnerIdRef.current || !socketRef.current) return
@@ -279,14 +282,24 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   async function initializeMediaAndSocket() {
     setStatus('connecting')
 
+    let detectedMode = 'text'
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       myStreamRef.current = stream
       if (myVideoRef.current) myVideoRef.current.srcObject = stream
+      detectedMode = 'video'
     } catch {
-      setStatus('cam_error')
-      return
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true })
+        myStreamRef.current = stream
+        detectedMode = 'audio'
+      } catch {
+        myStreamRef.current = null
+        detectedMode = 'text'
+      }
     }
+    setMyMediaMode(detectedMode)
+    mediaModeRef.current = detectedMode
 
     const socket = io(SERVER, {
       auth: { fingerprint: fingerprint() },
@@ -304,7 +317,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     socket.on('connect', () => {
       clearTimeout(wakeTimeout)
       setStatus('waiting')
-      socket.emit('find_match', { mood, intent })
+      socket.emit('find_match', { mood, intent, mediaMode: mediaModeRef.current })
     })
 
     socket.on('connect_error', () => {
@@ -321,16 +334,19 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
       systemMessage(`Too many fast skips. Try again in ${waitSeconds}s.`)
       setTimeout(() => {
         setStatus('waiting')
-        socket.emit('find_match', { mood, intent })
+        socket.emit('find_match', { mood, intent, mediaMode: mediaModeRef.current })
       }, waitSeconds * 1000)
     })
 
-    socket.on('match_found', async ({ partnerId, initiator, starter: serverStarter }) => {
+    socket.on('match_found', async ({ partnerId, initiator, starter: serverStarter, partnerMediaMode: pMode }) => {
       partnerIdRef.current = partnerId
+      setPartnerMediaMode(pMode ?? 'text')
       setStarter(serverStarter || '')
       setStatus('connected')
       resetAll()
-      await startPC(initiator, socket, partnerId)
+      if (mediaModeRef.current !== 'text') {
+        await startPC(initiator, socket, partnerId)
+      }
     })
 
     socket.on('webrtc_offer', async ({ offer, from }) => {
@@ -497,11 +513,12 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
 
     setStatus('waiting')
     setStarter('')
+    setPartnerMediaMode(null)
     resetAll()
     if (chatMode === 'text') {
       socketRef.current?.emit('find_match', { mood, intent, textOnly: true })
     } else {
-      socketRef.current?.emit('find_match', { mood, intent })
+      socketRef.current?.emit('find_match', { mood, intent, mediaMode: mediaModeRef.current })
     }
   }
 
@@ -849,21 +866,41 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
 
   return (
     <div style={{ height: '100vh', background: '#000', position: 'relative', overflow: 'hidden' }}>
-      <video
-        ref={partnerVideoRef}
-        autoPlay
-        playsInline
-        style={{
+      {partnerMediaMode && partnerMediaMode !== 'video' ? (
+        <div style={{
           position: 'absolute',
           inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          filter: partnerFilter,
-          transition: 'filter 0.2s ease',
-          background: 'radial-gradient(circle at center, #10101a, #020203)',
-        }}
-      />
+          background: '#0d0d14',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 0,
+        }}>
+          <div style={{ fontSize: '52px', marginBottom: '12px' }}>
+            {partnerMediaMode === 'text' ? '💬' : '🎤'}
+          </div>
+          <p style={{ color: '#888', fontSize: '14px', fontWeight: '600', letterSpacing: '0.3px' }}>
+            {partnerMediaMode === 'text' ? "Text only — they don't have a camera" : 'Voice only — no camera'}
+          </p>
+        </div>
+      ) : (
+        <video
+          ref={partnerVideoRef}
+          autoPlay
+          playsInline
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            filter: partnerFilter,
+            transition: 'filter 0.2s ease',
+            background: 'radial-gradient(circle at center, #10101a, #020203)',
+          }}
+        />
+      )}
 
       <div
         style={{
