@@ -201,7 +201,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
             // Send Milo's opening message
             setMiloMessages([{
               role: 'assistant',
-              content: 'Koi nahi mila abhi... but Milo hai! 👋 Iske saath baat karo while we find someone real!',
+              content: 'heyy, kaisa chal raha hai?',
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             }])
           }
@@ -1152,51 +1152,76 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
           }}
         >
           {isMiloActive && status !== 'partner_left' ? (
-            <div style={{ width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', height: '65vh' }}>
-              <div style={{ textAlign: 'center', marginBottom: '14px' }}>
-                <div style={{ fontSize: '32px' }}>🤖</div>
-                <p style={{ color: 'var(--text-1)', fontWeight: '800', fontSize: '17px', margin: '6px 0 2px' }}>Milo</p>
-                <p style={{ color: 'var(--accent)', fontSize: '12px', fontWeight: '600' }}>
-                  <span className="blink" style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent)', marginRight: '5px' }} />
-                  Still finding a real match...
-                  {onlineCount > 0 && ` • ${onlineCount} online`}
-                </p>
+            <div className="chat-room" style={{ width: '100%', maxWidth: '600px', background: 'var(--bg-0)' }}>
+              {/* Header — matches normal text chat exactly */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '18px 20px', borderBottom: '1px solid var(--border-1)', flexShrink: 0,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '20px', fontWeight: '900', color: 'var(--text-1)', letterSpacing: '-0.04em' }}>miloo</span>
+                  <Pill color="rgba(99,102,241,0.08)" border="rgba(99,102,241,0.25)" text="var(--accent)">
+                    <span className="blink" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
+                    Milo
+                  </Pill>
+                </div>
+                <button onClick={onExit} style={{
+                  background: 'var(--surface-2)', color: 'var(--text-2)',
+                  padding: '9px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: '600',
+                  border: '1px solid var(--border-1)', cursor: 'pointer',
+                }}>Exit</button>
               </div>
-              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', padding: '4px 0' }}>
+
+              {/* Messages */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {miloMessages.map((msg, i) => (
-                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                  <div key={i} style={{
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                    animation: 'msgPop 0.18s ease',
+                  }}>
                     <div style={{
-                      maxWidth: '80%', padding: '10px 14px',
-                      borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                      maxWidth: '75%', padding: '12px 16px',
+                      borderRadius: msg.role === 'user' ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
                       background: msg.role === 'user' ? 'var(--accent)' : 'var(--surface-2)',
                       color: msg.role === 'user' ? 'var(--accent-text)' : 'var(--text-1)',
-                      fontSize: '14px', lineHeight: 1.5, wordBreak: 'break-word',
+                      fontSize: '15px', lineHeight: 1.5, wordBreak: 'break-word',
                       border: msg.role === 'user' ? 'none' : '1px solid var(--border-1)',
                     }}>{msg.content}</div>
-                    <span style={{ fontSize: '10px', color: 'var(--text-4)', marginTop: '3px', padding: '0 4px' }}>{msg.time}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-4)', marginTop: '4px', paddingLeft: '6px', paddingRight: '6px' }}>{msg.time}</span>
                   </div>
                 ))}
                 {miloTyping && (
-                  <div style={{ display: 'flex', gap: '5px', padding: '10px 14px', background: 'var(--surface-2)', borderRadius: '18px 18px 18px 4px', border: '1px solid var(--border-1)', width: 'fit-content' }}>
-                    <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0' }}>
+                    <div style={{ display: 'flex', gap: '5px', padding: '12px 16px', background: 'var(--surface-2)', borderRadius: '20px 20px 20px 4px', border: '1px solid var(--border-1)' }}>
+                      <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
+                    </div>
                   </div>
                 )}
                 <div ref={miloMessagesEndRef} />
               </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '12px', alignItems: 'center', background: 'var(--surface-1)', borderRadius: '999px', padding: '6px 6px 6px 16px', border: '1px solid var(--border-1)' }}>
-                <input
-                  value={miloInput}
-                  onChange={e => setMiloInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && sendMiloMessage()}
-                  placeholder="Milo se baat karo..."
-                  style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text-1)', fontSize: '14px', outline: 'none', minHeight: '44px' }}
-                />
-                <button onClick={() => sendMiloMessage()} style={{
-                  background: miloInput.trim() ? 'var(--accent)' : 'var(--surface-2)',
-                  color: miloInput.trim() ? 'var(--accent-text)' : 'var(--text-3)',
-                  border: 'none', borderRadius: '50%', width: '40px', height: '40px',
-                  fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                }}>↑</button>
+
+              {/* Input bar — identical to normal chat */}
+              <div style={{ padding: '16px 20px 20px', borderTop: '1px solid var(--border-1)', flexShrink: 0 }}>
+                <div style={{
+                  display: 'flex', gap: '10px', alignItems: 'center',
+                  background: 'var(--surface-1)', borderRadius: '999px',
+                  padding: '8px 8px 8px 18px', border: '1px solid var(--border-1)',
+                }}>
+                  <input
+                    value={miloInput}
+                    onChange={e => setMiloInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && sendMiloMessage()}
+                    placeholder="Type a message..."
+                    style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text-1)', fontSize: '15px', outline: 'none' }}
+                  />
+                  <button onClick={() => sendMiloMessage()} style={{
+                    background: miloInput.trim() ? 'var(--accent)' : 'var(--surface-2)',
+                    color: miloInput.trim() ? 'var(--accent-text)' : 'var(--text-3)',
+                    border: 'none', borderRadius: '50%', width: '40px', height: '40px',
+                    fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>↑</button>
+                </div>
               </div>
             </div>
           ) : (
