@@ -1,3 +1,5 @@
+import useCanonical from '../hooks/useCanonical'
+
 const sections = [
   {
     title: '18+ Only',
@@ -34,6 +36,7 @@ const sections = [
 ]
 
 export default function Terms({ onBack }) {
+  useCanonical('https://www.miloo.chat/terms')
   return (
     <div
       style={{

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import ThemeToggle from '../components/ThemeToggle'
+import useCanonical from '../hooks/useCanonical'
 
 const SERVER =
   window.location.hostname === 'localhost'
@@ -7,6 +8,7 @@ const SERVER =
     : 'https://rcapp-server.onrender.com'
 
 export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
+  useCanonical('https://www.miloo.chat/')
   const [liveStats, setLiveStats] = useState(null)
 
   useEffect(() => {

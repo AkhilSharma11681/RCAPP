@@ -1,21 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import Home from './pages/Home'
 import MoodSelect from './pages/MoodSelect'
 import ChatRoom from './pages/ChatRoom'
 import Terms from './pages/Terms'
 
-function navigate(page) {
-  window.history.pushState({ page }, '', `#${page}`)
-}
+function AppRoutes() {
+  const navigate = useNavigate()
+  const location = useLocation()
 
-export default function App() {
-  const [page, setPage] = useState('home')
   const [selectedMood, setSelectedMood] = useState(null)
   const [selectedIntent, setSelectedIntent] = useState(null)
   const [safeMode, setSafeMode] = useState(false)
   const [chatMode, setChatMode] = useState('video')
 
-  // Theme — default to system preference, persist to localStorage
   const getInitialTheme = () => {
     const saved = localStorage.getItem('miloo-theme')
     if (saved) return saved
@@ -30,40 +28,24 @@ export default function App() {
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
 
-  // History / back button
-  useEffect(() => {
-    window.history.replaceState({ page: 'home' }, '', '#home')
-    const handlePop = event => {
-      const p = event.state?.page || 'home'
-      if (p === 'home') {
-        setSelectedMood(null)
-        setSelectedIntent(null)
-        setSafeMode(false)
-        setChatMode('video')
-      }
-      setPage(p)
-    }
-    window.addEventListener('popstate', handlePop)
-    return () => window.removeEventListener('popstate', handlePop)
-  }, [])
-
   useEffect(() => {
     const handleEsc = event => {
-      if (event.key === 'Escape' && page !== 'home') goHome()
+      if (event.key === 'Escape' && location.pathname !== '/') {
+        navigate('/')
+      }
     }
     window.addEventListener('keydown', handleEsc)
     return () => window.removeEventListener('keydown', handleEsc)
-  }, [page])
+  }, [location.pathname, navigate])
 
-  const goToMood = () => { navigate('mood'); setPage('mood') }
+  const goToMood = () => navigate('/mood')
 
   const goToChat = ({ mood, intent, safeMode: safe, chatMode: mode }) => {
     setSelectedMood(mood)
     setSelectedIntent(intent)
     setSafeMode(safe)
     setChatMode(mode || 'video')
-    navigate('chat')
-    setPage('chat')
+    navigate('/chat')
   }
 
   const goHome = () => {
@@ -71,42 +53,69 @@ export default function App() {
     setSelectedIntent(null)
     setSafeMode(false)
     setChatMode('video')
-    navigate('home')
-    setPage('home')
+    navigate('/')
   }
 
   return (
-    <>
-      {page === 'home' && (
-        <Home
-          onStart={goToMood}
-          onTerms={() => { navigate('terms'); setPage('terms') }}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-        />
-      )}
-      {page === 'mood' && (
-        <MoodSelect
-          onContinue={goToChat}
-          onBack={goHome}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-        />
-      )}
-      {page === 'chat' && (
-        <ChatRoom
-          mood={selectedMood}
-          intent={selectedIntent}
-          safeMode={safeMode}
-          chatMode={chatMode}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          onExit={goHome}
-        />
-      )}
-      {page === 'terms' && (
-        <Terms onBack={goHome} theme={theme} onToggleTheme={toggleTheme} />
-      )}
-    </>
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <Home
+            onStart={goToMood}
+            onTerms={() => navigate('/terms')}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
+        }
+      />
+      <Route
+        path="/mood"
+        element={
+          <MoodSelect
+            onContinue={goToChat}
+            onBack={goHome}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
+        }
+      />
+      <Route
+        path="/chat"
+        element={
+          <ChatRoom
+            mood={selectedMood}
+            intent={selectedIntent}
+            safeMode={safeMode}
+            chatMode={chatMode}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            onExit={goHome}
+          />
+        }
+      />
+      <Route
+        path="/terms"
+        element={
+          <Terms onBack={goHome} theme={theme} onToggleTheme={toggleTheme} />
+        }
+      />
+      {/* Catch-all: redirect unknown paths to home */}
+      <Route path="*" element={<RedirectHome />} />
+    </Routes>
+  )
+}
+
+function RedirectHome() {
+  const navigate = useNavigate()
+  useEffect(() => { navigate('/', { replace: true }) }, [navigate])
+  return null
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
   )
 }

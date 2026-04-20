@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ThemeToggle from '../components/ThemeToggle'
+import useCanonical from '../hooks/useCanonical'
 
 const moods = [
   { id: 'deep',    emoji: '🧠', label: 'Deep Talk',   desc: 'Real, thoughtful conversation' },
@@ -12,6 +13,7 @@ const moods = [
 ]
 
 export default function MoodSelect({ onContinue, onBack, theme, onToggleTheme }) {
+  useCanonical('https://www.miloo.chat/mood')
   const [selectedMood, setSelectedMood] = useState('any')
   const [chatMode, setChatMode] = useState('text')
 

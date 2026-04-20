@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 import ThemeToggle from '../components/ThemeToggle'
+import useCanonical from '../hooks/useCanonical'
 
 const SERVER =
   window.location.hostname === 'localhost'
@@ -109,6 +110,7 @@ function fingerprint() {
 }
 
 export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', theme, onToggleTheme, onExit }) {
+  useCanonical('https://www.miloo.chat/chat')
   const moodMeta = useMemo(() => getMoodMeta(mood), [mood])
 
   const [status, setStatus] = useState(chatMode === 'text' ? 'text_connecting' : 'pre_permission')
