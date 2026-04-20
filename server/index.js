@@ -4,7 +4,8 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-const Anthropic = require("@anthropic-ai/sdk");
+const Groq = require("groq-sdk");
+require("dotenv").config();
 
 const app = express();
 const server = http.createServer(app);
@@ -481,7 +482,7 @@ io.on("connection", socket => {
 });
 
 // ── Milo AI companion endpoint ──────────────────────────────────────
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const MILO_SYSTEM = `You are Milo, a fun companion on Miloo chat.
 
@@ -533,14 +534,17 @@ app.post("/api/milo", miloRateLimit, async (req, res) => {
       content: String(m.content || "").slice(0, 500),
     }));
 
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: MILO_SYSTEM },
+        ...history,
+      ],
       max_tokens: 150,
-      system: MILO_SYSTEM,
-      messages: history,
+      temperature: 0.9,
     });
 
-    const reply = response.content[0]?.text || "Arre yaar, kuch hua... try again? 😅";
+    const reply = completion.choices[0]?.message?.content || "Arre yaar, kuch hua... try again? 😅";
     res.json({ reply });
   } catch (err) {
     console.error("Milo error:", err.message);
