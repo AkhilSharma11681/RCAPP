@@ -42,7 +42,9 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
               color: 'var(--accent)', fontSize: '12px', fontWeight: '700',
             }}>
               <span className="blink" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
-              {liveStats.active_pairs > 0 ? `${liveStats.active_pairs} online` : `${liveStats.waiting_users} waiting`}
+              {liveStats.active_pairs > 0
+                ? `🟢 ${liveStats.active_pairs * 2} log abhi baat kar rahe hain`
+                : `🟢 ${liveStats.waiting_users} waiting`}
             </div>
           )}
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
@@ -106,7 +108,7 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
         {/* Trust pills */}
         <div style={{
           display: 'flex', flexWrap: 'wrap', gap: '8px',
-          justifyContent: 'center', marginBottom: '56px',
+          justifyContent: 'center', marginBottom: '24px',
         }}>
           {['No signup', '18+ only', 'Anonymous', 'Text or Video', 'Always free'].map(item => (
             <span key={item} style={{
@@ -117,12 +119,20 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
           ))}
         </div>
 
+        {/* Social proof */}
+        <div style={{ marginBottom: '40px', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-3)', fontSize: '13px', fontWeight: '600', letterSpacing: '0.02em' }}>
+            10,000+ conversations started &nbsp;•&nbsp; No signup &nbsp;•&nbsp; No bots &nbsp;•&nbsp; 100% anonymous
+          </p>
+        </div>
+
         {/* How it works — responsive grid */}
         <div style={{
           width: '100%',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
           gap: '12px',
+          marginBottom: '56px',
         }}>
           {[
             { emoji: '🎭', label: 'Pick a mood', desc: 'Choose the kind of conversation you want' },
@@ -138,6 +148,26 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
               <div style={{ color: 'var(--text-1)', fontSize: '13px', fontWeight: '700', marginBottom: '5px' }}>{step.label}</div>
               <div style={{ color: 'var(--text-3)', fontSize: '12px', lineHeight: 1.55 }}>{step.desc}</div>
             </div>
+          ))}
+        </div>
+
+        {/* FAQ — SEO */}
+        <div style={{ width: '100%', textAlign: 'left', marginBottom: '48px' }}>
+          <p style={{ color: 'var(--text-3)', fontSize: '11px', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '16px', textAlign: 'center' }}>
+            Frequently Asked Questions
+          </p>
+          {[
+            { q: 'Is Miloo free?', a: 'Yes, Miloo is completely free. No subscription, no hidden fees, no signup required.' },
+            { q: 'Is Miloo safe?', a: 'Miloo is built with safety in mind — no accounts, no stored video, and a reporting system to remove bad actors. Always use caution with strangers online.' },
+            { q: 'What happened to Omegle?', a: 'Omegle shut down in 2023. Miloo is a modern alternative focused on real conversations, mood-based matching, and a safer experience.' },
+            { q: 'How is Miloo different from other random chat apps?', a: 'Miloo matches you by mood — deep talk, music, gaming, venting, and more. No bots, no signup, and an AI companion (Milo) keeps you company while you wait for a real match.' },
+          ].map(({ q, a }) => (
+            <details key={q} style={{ marginBottom: '10px', borderRadius: '14px', background: 'var(--bg-2)', border: '1px solid var(--border-1)', padding: '14px 18px' }}>
+              <summary style={{ color: 'var(--text-1)', fontSize: '14px', fontWeight: '700', cursor: 'pointer', listStyle: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {q} <span style={{ color: 'var(--text-3)', fontSize: '18px', fontWeight: '400' }}>+</span>
+              </summary>
+              <p style={{ color: 'var(--text-3)', fontSize: '13px', lineHeight: 1.7, marginTop: '10px' }}>{a}</p>
+            </details>
           ))}
         </div>
 

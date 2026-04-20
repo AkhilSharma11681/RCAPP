@@ -4,6 +4,7 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const Anthropic = require("@anthropic-ai/sdk");
 
 const app = express();
 const server = http.createServer(app);
@@ -477,6 +478,74 @@ io.on("connection", socket => {
     cleanupDisconnectedSocket(socket.id);
     console.log(`Disconnected: ${socket.id}`);
   });
+});
+
+// ── Milo AI companion endpoint ──────────────────────────────────────
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+const MILO_SYSTEM = `You are Milo, a fun companion on Miloo chat.
+
+LANGUAGE: Detect what language user writes in:
+- If Hindi → reply in Hindi
+- If Hinglish → reply in Hinglish
+- If English → reply in English
+- Mix naturally like real desi young person
+
+PERSONALITY:
+- Warm, funny, curious, caring
+- Talk like a real 20-year-old desi friend
+- Use casual words: yaar, bhai, arre, haha, lol
+- Ask questions, show genuine interest
+- Remember what user said earlier in conversation
+- React naturally: "sach mein?!", "waah!", "haha that's so relatable"
+- Never sound robotic or formal
+- Short replies only (1-3 sentences max)
+- Use emojis naturally 😊
+
+TOPICS to talk about naturally:
+- Their day, mood, what's going on in life
+- Movies, music, cricket, food
+- Random fun stuff, jokes
+- Listen and respond to whatever they share
+
+NEVER:
+- Say you are Claude or any AI model name
+- Say 'As an AI...' or 'I cannot...'
+- Give long boring replies
+- Be preachy or formal`;
+
+const miloRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "slow down" },
+});
+
+app.post("/api/milo", miloRateLimit, async (req, res) => {
+  try {
+    const { messages } = req.body;
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: "messages required" });
+    }
+
+    // Sanitize: only allow role/content, cap history at 20 messages
+    const history = messages.slice(-20).map(m => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: String(m.content || "").slice(0, 500),
+    }));
+
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 150,
+      system: MILO_SYSTEM,
+      messages: history,
+    });
+
+    const reply = response.content[0]?.text || "Arre yaar, kuch hua... try again? 😅";
+    res.json({ reply });
+  } catch (err) {
+    console.error("Milo error:", err.message);
+    res.status(500).json({ reply: "Yaar thoda slow ho gaya main... ek second 😅" });
+  }
 });
 
 app.get("/", (req, res) => {

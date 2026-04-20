@@ -190,6 +190,27 @@ video {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* Mobile keyboard fix: use dvh so layout shrinks when keyboard opens */
+  max-height: 100dvh;
+}
+
+/* Mobile: ensure input stays above keyboard */
+@supports (height: 100dvh) {
+  .chat-room {
+    height: 100dvh;
+  }
+}
+
+/* Minimum touch target size */
+button {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Override for icon-only small buttons that should stay compact */
+button.compact {
+  min-height: unset;
+  min-width: unset;
 }
 
 @media (prefers-reduced-motion: reduce) {

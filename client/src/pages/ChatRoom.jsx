@@ -132,6 +132,20 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   const [myMediaMode, setMyMediaMode] = useState('text')
   const [partnerMediaMode, setPartnerMediaMode] = useState(null)
 
+  // Milo AI companion state
+  const [isMiloActive, setIsMiloActive] = useState(false)
+  const [miloMessages, setMiloMessages] = useState([])
+  const [miloInput, setMiloInput] = useState('')
+  const [miloTyping, setMiloTyping] = useState(false)
+  const [waitingTime, setWaitingTime] = useState(0)
+  const [onlineCount, setOnlineCount] = useState(null)
+  const [rotatingMsg, setRotatingMsg] = useState(0)
+  const [chatRating, setChatRating] = useState(0)
+  const miloMessagesEndRef = useRef(null)
+  const miloTimerRef = useRef(null)
+  const waitingTimeRef = useRef(null)
+  const rotatingMsgRef = useRef(null)
+
   const socketRef = useRef(null)
   const pcRef = useRef(null)
   const myVideoRef = useRef(null)
@@ -149,6 +163,94 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   function emitTyping() {
     if (!partnerIdRef.current || !socketRef.current) return
     socketRef.current.emit('typing', { to: partnerIdRef.current })
+  }
+
+  const ROTATING_MSGS = [
+    'Koi interesting insaan dhoondh rahe hain... 🔍',
+    'Almost there... 😊',
+    'Good things take a moment yaar!',
+    'Bas ek second...',
+    'Sahi match dhoondh rahe hain tumhare liye ✨',
+  ]
+
+  // Fetch online count
+  useEffect(() => {
+    fetch(SERVER).then(r => r.json()).then(d => {
+      setOnlineCount((d.active_pairs * 2) + d.waiting_users)
+    }).catch(() => {})
+  }, [])
+
+  // Rotating waiting messages
+  useEffect(() => {
+    rotatingMsgRef.current = setInterval(() => {
+      setRotatingMsg(prev => (prev + 1) % ROTATING_MSGS.length)
+    }, 5000)
+    return () => clearInterval(rotatingMsgRef.current)
+  }, [])
+
+  // Milo trigger — after 10s of waiting with no match
+  useEffect(() => {
+    const isWaiting = ['waiting', 'text_connecting'].includes(status)
+    if (isWaiting && !isMiloActive) {
+      waitingTimeRef.current = setInterval(() => {
+        setWaitingTime(prev => {
+          const next = prev + 1
+          if (next >= 10) {
+            clearInterval(waitingTimeRef.current)
+            setIsMiloActive(true)
+            // Send Milo's opening message
+            setMiloMessages([{
+              role: 'assistant',
+              content: 'Koi nahi mila abhi... but Milo hai! 👋 Iske saath baat karo while we find someone real!',
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            }])
+          }
+          return next
+        })
+      }, 1000)
+    } else {
+      clearInterval(waitingTimeRef.current)
+      if (!isWaiting) setWaitingTime(0)
+    }
+    return () => clearInterval(waitingTimeRef.current)
+  }, [status, isMiloActive])
+
+  // Scroll Milo messages
+  useEffect(() => {
+    miloMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [miloMessages])
+
+  async function sendMiloMessage(customText) {
+    const text = typeof customText === 'string' ? customText : miloInput
+    if (!text.trim()) return
+
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const userMsg = { role: 'user', content: text, time }
+    const updated = [...miloMessages, userMsg]
+    setMiloMessages(updated)
+    setMiloInput('')
+    setMiloTyping(true)
+
+    try {
+      const res = await fetch(`${SERVER}/api/milo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: updated.map(m => ({ role: m.role, content: m.content })),
+        }),
+      })
+      const data = await res.json()
+      const replyTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      setMiloMessages(prev => [...prev, { role: 'assistant', content: data.reply, time: replyTime }])
+    } catch {
+      setMiloMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Yaar connection slow hai... ek second 😅',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }])
+    } finally {
+      setMiloTyping(false)
+    }
   }
 
   useEffect(() => {
@@ -207,6 +309,10 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     setQuickPrompt(randomFrom(moodMeta.prompts))
     setPartnerBlurred(safeMode)
     setMyBlur(safeMode)
+    setIsMiloActive(false)
+    setMiloMessages([])
+    setWaitingTime(0)
+    setChatRating(0)
   }
 
   function initializeTextOnlySocket() {
@@ -248,10 +354,25 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     })
 
     socket.on('match_found', ({ partnerId, starter: serverStarter }) => {
-      partnerIdRef.current = partnerId
-      setStarter(serverStarter || '')
-      setStatus('text_chat')
-      resetAll()
+      // If Milo was active, let Milo say goodbye first
+      if (isMiloActive) {
+        setMiloMessages(prev => [...prev, {
+          role: 'assistant',
+          content: 'Arre yaar, koi mil gaya! Connecting you now 😄 It was fun talking! Bye 👋',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }])
+        setTimeout(() => {
+          partnerIdRef.current = partnerId
+          setStarter(serverStarter || '')
+          setStatus('text_chat')
+          resetAll()
+        }, 1800)
+      } else {
+        partnerIdRef.current = partnerId
+        setStarter(serverStarter || '')
+        setStatus('text_chat')
+        resetAll()
+      }
     })
 
     socket.on('receive_message', ({ message }) => {
@@ -341,13 +462,32 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     })
 
     socket.on('match_found', async ({ partnerId, initiator, starter: serverStarter, partnerMediaMode: pMode }) => {
-      partnerIdRef.current = partnerId
-      setPartnerMediaMode(pMode ?? 'text')
-      setStarter(serverStarter || '')
-      setStatus('connected')
-      resetAll()
-      if (mediaModeRef.current !== 'text') {
-        await startPC(initiator, socket, partnerId)
+      // If Milo was active, let Milo say goodbye first
+      if (isMiloActive) {
+        setMiloMessages(prev => [...prev, {
+          role: 'assistant',
+          content: 'Arre yaar, koi mil gaya! Connecting you now 😄 It was fun talking! Bye 👋',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }])
+        setTimeout(async () => {
+          partnerIdRef.current = partnerId
+          setPartnerMediaMode(pMode ?? 'text')
+          setStarter(serverStarter || '')
+          setStatus('connected')
+          resetAll()
+          if (mediaModeRef.current !== 'text') {
+            await startPC(initiator, socket, partnerId)
+          }
+        }, 1800)
+      } else {
+        partnerIdRef.current = partnerId
+        setPartnerMediaMode(pMode ?? 'text')
+        setStarter(serverStarter || '')
+        setStatus('connected')
+        resetAll()
+        if (mediaModeRef.current !== 'text') {
+          await startPC(initiator, socket, partnerId)
+        }
       }
     })
 
@@ -540,6 +680,14 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     socketRef.current?.emit('report_user')
   }
 
+  function shareApp() {
+    if (navigator.share) {
+      navigator.share({ title: 'Miloo', text: 'Real conversations with real strangers — no signup!', url: 'https://www.miloo.chat' })
+    } else {
+      navigator.clipboard?.writeText('https://www.miloo.chat').then(() => alert('Link copied! Share it with a friend 🙌'))
+    }
+  }
+
   const partnerFilter = partnerBlurred ? 'blur(14px) brightness(0.45)' : 'none'
   const myFilter = camOff
     ? 'brightness(0.15)'
@@ -641,6 +789,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
             <ThemeToggle theme={theme} onToggle={onToggleTheme} />
             <GlassBtn onClick={reportUser} active={reportSent} activeColor="rgba(248,113,113,0.3)">{reportSent ? '✅' : '🚩'}</GlassBtn>
             <GlassBtn onClick={sendGoodConvo} active={goodSent} activeColor="rgba(99,102,241,0.25)">{goodSent ? '✅' : '👍'}</GlassBtn>
+            <GlassBtn onClick={shareApp}>🔗</GlassBtn>
             <button onClick={onExit} style={{
               background: 'var(--surface-2)', color: 'var(--text-2)',
               padding: '9px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: '600',
@@ -1002,6 +1151,56 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
             padding: '24px',
           }}
         >
+          {isMiloActive && status !== 'partner_left' ? (
+            <div style={{ width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', height: '65vh' }}>
+              <div style={{ textAlign: 'center', marginBottom: '14px' }}>
+                <div style={{ fontSize: '32px' }}>🤖</div>
+                <p style={{ color: 'var(--text-1)', fontWeight: '800', fontSize: '17px', margin: '6px 0 2px' }}>Milo</p>
+                <p style={{ color: 'var(--accent)', fontSize: '12px', fontWeight: '600' }}>
+                  <span className="blink" style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent)', marginRight: '5px' }} />
+                  Still finding a real match...
+                  {onlineCount > 0 && ` • ${onlineCount} online`}
+                </p>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', padding: '4px 0' }}>
+                {miloMessages.map((msg, i) => (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                    <div style={{
+                      maxWidth: '80%', padding: '10px 14px',
+                      borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                      background: msg.role === 'user' ? 'var(--accent)' : 'var(--surface-2)',
+                      color: msg.role === 'user' ? 'var(--accent-text)' : 'var(--text-1)',
+                      fontSize: '14px', lineHeight: 1.5, wordBreak: 'break-word',
+                      border: msg.role === 'user' ? 'none' : '1px solid var(--border-1)',
+                    }}>{msg.content}</div>
+                    <span style={{ fontSize: '10px', color: 'var(--text-4)', marginTop: '3px', padding: '0 4px' }}>{msg.time}</span>
+                  </div>
+                ))}
+                {miloTyping && (
+                  <div style={{ display: 'flex', gap: '5px', padding: '10px 14px', background: 'var(--surface-2)', borderRadius: '18px 18px 18px 4px', border: '1px solid var(--border-1)', width: 'fit-content' }}>
+                    <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
+                  </div>
+                )}
+                <div ref={miloMessagesEndRef} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '12px', alignItems: 'center', background: 'var(--surface-1)', borderRadius: '999px', padding: '6px 6px 6px 16px', border: '1px solid var(--border-1)' }}>
+                <input
+                  value={miloInput}
+                  onChange={e => setMiloInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && sendMiloMessage()}
+                  placeholder="Milo se baat karo..."
+                  style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text-1)', fontSize: '14px', outline: 'none', minHeight: '44px' }}
+                />
+                <button onClick={() => sendMiloMessage()} style={{
+                  background: miloInput.trim() ? 'var(--accent)' : 'var(--surface-2)',
+                  color: miloInput.trim() ? 'var(--accent-text)' : 'var(--text-3)',
+                  border: 'none', borderRadius: '50%', width: '40px', height: '40px',
+                  fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>↑</button>
+              </div>
+            </div>
+          ) : (
+            <>
           <div style={{
             width: '80px', height: '80px', borderRadius: '50%',
             background: 'var(--accent-dim)', border: '1px solid var(--accent-border)',
@@ -1019,7 +1218,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
                 ? 'Hit next to meet someone new on the same vibe.'
                 : matchSeconds > 30
                   ? 'Not many people online right now. Try a different mood or check back later.'
-                  : waitingHint}
+                  : ROTATING_MSGS[rotatingMsg]}
             </p>
           </div>
 
@@ -1027,6 +1226,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
             <div style={{ marginTop: '18px', display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
               <Pill>{moodMeta.emoji} {moodMeta.label}</Pill>
               <Pill>Waiting {matchSeconds}s</Pill>
+              {onlineCount > 0 && <Pill color="rgba(74,222,128,0.08)" border="rgba(74,222,128,0.2)" text="#4ade80">🟢 {onlineCount} online</Pill>}
             </div>
           )}
 
@@ -1036,7 +1236,27 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
             </button>
           )}
 
-          {status === 'partner_left' && <Btn onClick={findNext} style={{ marginTop: '24px' }}>Find Someone New</Btn>}
+          {status === 'partner_left' && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginTop: '24px' }}>
+              {chatRating === 0 && (
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ color: 'var(--text-3)', fontSize: '13px', marginBottom: '8px' }}>Kaisi rahi baat?</p>
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                    {[1,2,3,4,5].map(star => (
+                      <button key={star} onClick={() => setChatRating(star)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', minWidth: '44px', minHeight: '44px' }}>⭐</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {chatRating > 0 && <p style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: '600' }}>Shukriya! {'⭐'.repeat(chatRating)}</p>}
+              <Btn onClick={findNext}>Find Someone New</Btn>
+              <button onClick={shareApp} style={{ background: 'var(--surface-1)', border: '1px solid var(--border-1)', color: 'var(--text-2)', borderRadius: '999px', padding: '10px 20px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', minHeight: '44px' }}>
+                Share Miloo 🔗
+              </button>
+            </div>
+          )}
+            </>
+          )}
         </div>
       )}
 
