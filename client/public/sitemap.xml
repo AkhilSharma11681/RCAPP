@@ -4,24 +4,18 @@
     <loc>https://www.miloo.chat/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
-    <lastmod>2026-04-20</lastmod>
-  </url>
-  <url>
-    <loc>https://www.miloo.chat/mood</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-    <lastmod>2026-04-20</lastmod>
-  </url>
-  <url>
-    <loc>https://www.miloo.chat/chat</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
-    <lastmod>2026-04-20</lastmod>
+    <lastmod>2026-04-29</lastmod>
   </url>
   <url>
     <loc>https://www.miloo.chat/terms</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
-    <lastmod>2026-04-20</lastmod>
+    <lastmod>2026-04-29</lastmod>
+  </url>
+  <url>
+    <loc>https://www.miloo.chat/blog/omegle-alternative</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <lastmod>2026-04-29</lastmod>
   </url>
 </urlset>

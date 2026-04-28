@@ -15,6 +15,31 @@ export default function OmegleAlternative() {
         'Looking for the best Omegle alternative in India? Discover Miloo — free random chat, no signup, meet strangers online instantly. Top picks for 2026.'
       )
     }
+
+    // Article JSON-LD structured data
+    const script = document.createElement('script')
+    script.type = 'application/ld+json'
+    script.id = 'article-jsonld'
+    script.text = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: 'Best Omegle Alternatives in India 2026',
+      description: 'Looking for Omegle alternatives? Try Miloo — free random chat, no signup needed. Top picks for India in 2026.',
+      url: 'https://www.miloo.chat/blog/omegle-alternative',
+      datePublished: '2026-04-29',
+      dateModified: '2026-04-29',
+      publisher: {
+        '@type': 'Organization',
+        name: 'Miloo',
+        url: 'https://www.miloo.chat',
+      },
+      author: {
+        '@type': 'Organization',
+        name: 'Miloo',
+      },
+    })
+    document.head.appendChild(script)
+
     return () => {
       document.title = 'Miloo — Meet Real Strangers Online | Free Random Chat'
       if (meta) {
@@ -23,6 +48,8 @@ export default function OmegleAlternative() {
           'Miloo is a free random chat app to meet strangers online. The best Omegle alternative for real video and voice conversations — match by mood, stay safe, connect instantly.'
         )
       }
+      const existing = document.getElementById('article-jsonld')
+      if (existing) existing.remove()
     }
   }, [])
 

@@ -61,12 +61,21 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
       }}>
 
         <h1 style={{
-          fontSize: 'clamp(72px, 16vw, 140px)',
+          fontSize: 'clamp(52px, 12vw, 100px)',
           fontWeight: '900', letterSpacing: '-0.07em', lineHeight: 0.88,
-          color: 'var(--text-1)', marginBottom: '24px',
+          color: 'var(--text-1)', marginBottom: '16px',
         }}>
-          miloo
+          Miloo
         </h1>
+
+        <h2 style={{
+          fontSize: 'clamp(16px, 3vw, 22px)',
+          fontWeight: '700', color: 'var(--accent)',
+          letterSpacing: '-0.02em', lineHeight: 1.2,
+          marginBottom: '20px',
+        }}>
+          Free Random Chat &amp; Omegle Alternative
+        </h2>
 
         <p style={{
           fontSize: 'clamp(20px, 3.5vw, 28px)',
@@ -194,15 +203,15 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
         >
           Safety &amp; Terms
         </button>
-        <button
-          onClick={() => navigate('/blog/omegle-alternative')}
+        <a
+          href="/blog/omegle-alternative"
           style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--text-3)', fontSize: '13px', fontWeight: '500', padding: 0,
+            color: 'var(--text-3)', fontSize: '13px', fontWeight: '500',
+            textDecoration: 'none',
           }}
         >
           Best Omegle Alternatives in India 2026
-        </button>
+        </a>
         <span style={{ color: 'var(--text-3)', fontSize: '13px' }}>
           © {new Date().getFullYear()} Miloo
         </span>
