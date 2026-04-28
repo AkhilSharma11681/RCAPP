@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import ThemeToggle from '../components/ThemeToggle'
 import useCanonical from '../hooks/useCanonical'
 
@@ -9,6 +10,7 @@ const SERVER =
 
 export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
   useCanonical('https://www.miloo.chat/')
+  const navigate = useNavigate()
   const [liveStats, setLiveStats] = useState(null)
 
   useEffect(() => {
@@ -172,6 +174,40 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
         </div>
 
       </div>
+
+      {/* ── Footer ── */}
+      <footer style={{
+        borderTop: '1px solid var(--border-1)',
+        padding: '24px',
+        textAlign: 'center',
+        display: 'flex',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        gap: '8px 20px',
+      }}>
+        <button
+          onClick={onTerms}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--text-3)', fontSize: '13px', fontWeight: '500', padding: 0,
+          }}
+        >
+          Safety &amp; Terms
+        </button>
+        <button
+          onClick={() => navigate('/blog/omegle-alternative')}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--text-3)', fontSize: '13px', fontWeight: '500', padding: 0,
+          }}
+        >
+          Best Omegle Alternatives in India 2026
+        </button>
+        <span style={{ color: 'var(--text-3)', fontSize: '13px' }}>
+          © {new Date().getFullYear()} Miloo
+        </span>
+      </footer>
+
     </div>
   )
 }

@@ -4,6 +4,7 @@ import Home from './pages/Home'
 import MoodSelect from './pages/MoodSelect'
 import ChatRoom from './pages/ChatRoom'
 import Terms from './pages/Terms'
+import OmegleAlternative from './pages/blog/OmegleAlternative'
 
 function AppRoutes() {
   const navigate = useNavigate()
@@ -99,6 +100,10 @@ function AppRoutes() {
         element={
           <Terms onBack={goHome} theme={theme} onToggleTheme={toggleTheme} />
         }
+      />
+      <Route
+        path="/blog/omegle-alternative"
+        element={<OmegleAlternative />}
       />
       {/* Catch-all: redirect unknown paths to home */}
       <Route path="*" element={<RedirectHome />} />
