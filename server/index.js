@@ -17,7 +17,25 @@ app.use(
   })
 );
 
-app.use(cors());
+const allowedOrigins = [
+  "https://www.miloo.chat",
+  "https://miloo.chat",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 app.use(
@@ -29,7 +47,7 @@ app.use(
 );
 
 const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
+  cors: { origin: allowedOrigins, methods: ["GET", "POST"] },
   pingTimeout: 60000,
   pingInterval: 25000,
 });
@@ -532,6 +550,10 @@ app.post("/api/milo", miloRateLimit, async (req, res) => {
     console.error("Milo error:", err.message);
     res.status(500).json({ reply: "Yaar thoda slow ho gaya main... ek second 😅" });
   }
+});
+
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", uptime: process.uptime() });
 });
 
 app.get("/", (req, res) => {

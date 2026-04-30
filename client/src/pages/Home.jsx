@@ -107,13 +107,15 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
           }}>
             Start Chatting →
           </button>
-          <button onClick={onTerms} style={{
+          <a href="/terms" style={{
+            color: 'inherit', textDecoration: 'none',
             padding: '13px 24px', fontSize: '14px', fontWeight: '500',
-            background: 'transparent', color: 'var(--text-3)',
+            background: 'transparent',
             borderRadius: '999px', border: '1px solid var(--border-1)', cursor: 'pointer',
+            display: 'inline-block',
           }}>
-            Safety & Terms
-          </button>
+            Safety &amp; Terms
+          </a>
         </div>
 
         {/* Trust pills */}

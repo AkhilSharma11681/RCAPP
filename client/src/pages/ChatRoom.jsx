@@ -134,6 +134,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
 
   // Milo AI companion state
   const [isMiloActive, setIsMiloActive] = useState(false)
+  const isMiloActiveRef = useRef(false)
   const [miloMessages, setMiloMessages] = useState([])
   const [miloInput, setMiloInput] = useState('')
   const [miloTyping, setMiloTyping] = useState(false)
@@ -197,6 +198,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
           const next = prev + 1
           if (next >= 10) {
             clearInterval(waitingTimeRef.current)
+            isMiloActiveRef.current = true
             setIsMiloActive(true)
             // Send Milo's opening message
             setMiloMessages([{
@@ -309,6 +311,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     setQuickPrompt(randomFrom(moodMeta.prompts))
     setPartnerBlurred(safeMode)
     setMyBlur(safeMode)
+    isMiloActiveRef.current = false
     setIsMiloActive(false)
     setMiloMessages([])
     setWaitingTime(0)
@@ -355,10 +358,10 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
 
     socket.on('match_found', ({ partnerId, starter: serverStarter }) => {
       // If Milo was active, let Milo say goodbye first
-      if (isMiloActive) {
+      if (isMiloActiveRef.current) {
         setMiloMessages(prev => [...prev, {
           role: 'assistant',
-          content: 'Arre yaar, koi mil gaya! Connecting you now 😄 It was fun talking! Bye 👋',
+          content: 'Someone just joined! Connecting you now 😊 It was fun talking! Bye 👋',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }])
         setTimeout(() => {
@@ -463,10 +466,10 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
 
     socket.on('match_found', async ({ partnerId, initiator, starter: serverStarter, partnerMediaMode: pMode }) => {
       // If Milo was active, let Milo say goodbye first
-      if (isMiloActive) {
+      if (isMiloActiveRef.current) {
         setMiloMessages(prev => [...prev, {
           role: 'assistant',
-          content: 'Arre yaar, koi mil gaya! Connecting you now 😄 It was fun talking! Bye 👋',
+          content: 'Someone just joined! Connecting you now 😊 It was fun talking! Bye 👋',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }])
         setTimeout(async () => {
@@ -1016,7 +1019,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   }
 
   return (
-    <div style={{ height: '100vh', background: '#000', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ height: '100dvh', background: '#000', position: 'relative', overflow: 'hidden' }}>
       {partnerMediaMode && partnerMediaMode !== 'video' ? (
         <div style={{
           position: 'absolute',
