@@ -1611,7 +1611,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
 function Center({ children }) {
   return (
     <div style={{
-      height: '100vh', height: '100dvh',
+      height: '100dvh',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'var(--bg-0)', padding: '20px',
     }}>
