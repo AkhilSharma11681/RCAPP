@@ -597,15 +597,20 @@ app.post("/api/milo", miloRateLimit, async (req, res) => {
 
 // ── Metered TURN credentials endpoint ──────────────────────────────
 app.get("/api/turn-credentials", async (req, res) => {
+  console.log("TURN: API Key present:", !!process.env.METERED_API_KEY);
+  console.log("TURN: API Key length:", process.env.METERED_API_KEY?.length);
+  console.log("TURN: API Key first 4 chars:", process.env.METERED_API_KEY?.slice(0, 4));
   try {
     const apiKey = process.env.METERED_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: "METERED_API_KEY not configured" });
     }
-    const response = await fetch(
-      `https://miloo-chat.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`
-    );
+    const url = `https://miloo-chat.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`;
+    console.log("TURN: Fetching from URL:", `https://miloo-chat.metered.live/api/v1/turn/credentials?apiKey=${apiKey.slice(0, 4)}...`);
+    const response = await fetch(url);
+    console.log("TURN: Metered response status:", response.status);
     const data = await response.json();
+    console.log("TURN: Credentials received, count:", Array.isArray(data) ? data.length : "not array");
     res.json(data);
   } catch (err) {
     console.error("TURN credentials error:", err.message);
