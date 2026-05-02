@@ -45,7 +45,7 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
             }}>
               <span className="blink" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
               {liveStats.active_pairs > 0
-                ? `🟢 ${liveStats.active_pairs * 2} log abhi baat kar rahe hain`
+                ? `🟢 ${liveStats.active_pairs * 2} chatting now`
                 : `🟢 ${liveStats.waiting_users} waiting`}
             </div>
           )}
