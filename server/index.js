@@ -31,7 +31,7 @@ app.use(
         !origin ||
         origin === 'null' ||
         allowedOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app')
+        origin === 'https://rcapp-seven.vercel.app'
       ) {
         callback(null, true);
       } else {
@@ -284,6 +284,7 @@ function isSuspiciousMessage(message) {
     /(wa\.me\/|whatsapp)/i,
     /(instagram\.com|snap(chat)?)/i,
     /(\+\d{10,})/,
+    /\b[6-9]\d{9}\b/,          // Indian mobile without +91
     /(join.*group|join.*channel)/i,
     /(earn.*money|make.*money)/i,
     /(onlyfans|cashapp|paypal|upi|dm me)/i,
@@ -596,7 +597,7 @@ app.post("/api/milo", miloRateLimit, async (req, res) => {
     res.json({ reply });
   } catch (err) {
     console.error("Milo error:", err.message);
-    res.status(500).json({ reply: "Yaar thoda slow ho gaya main... ek second 😅" });
+    res.status(500).json({ reply: "Thoda slow ho gaya... ek second 😅" });
   }
 });
 
