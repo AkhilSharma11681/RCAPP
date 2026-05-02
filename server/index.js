@@ -601,27 +601,32 @@ app.post("/api/milo", miloRateLimit, async (req, res) => {
 });
 
 // ── Metered TURN credentials endpoint ──────────────────────────────
-app.get("/api/turn-credentials", async (req, res) => {
+app.get("/api/turn-credentials", (req, res) => {
   res.header("Access-Control-Allow-Origin", "*");
-  console.log("TURN: API Key present:", !!process.env.METERED_API_KEY);
-  console.log("TURN: API Key length:", process.env.METERED_API_KEY?.length);
-  console.log("TURN: API Key first 4 chars:", process.env.METERED_API_KEY?.slice(0, 4));
-  try {
-    const apiKey = process.env.METERED_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: "METERED_API_KEY not configured" });
-    }
-    const url = `https://miloo-chat.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`;
-    console.log("TURN: Fetching from URL:", url.slice(0, 60) + "...");
-    const response = await fetch(url);
-    console.log("TURN: Metered response status:", response.status);
-    const data = await response.json();
-    console.log("TURN: Credentials received, count:", Array.isArray(data) ? data.length : "not array");
-    res.json(data);
-  } catch (err) {
-    console.error("TURN: Error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
+  const username = process.env.METERED_USERNAME;
+  const credential = process.env.METERED_PASSWORD;
+  console.log("TURN: Username present:", !!username);
+  console.log("TURN: Password present:", !!credential);
+  res.json([
+    {
+      urls: "stun:stun.l.google.com:19302",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:80",
+      username,
+      credential,
+    },
+    {
+      urls: "turn:global.relay.metered.ca:443",
+      username,
+      credential,
+    },
+    {
+      urls: "turns:global.relay.metered.ca:443",
+      username,
+      credential,
+    },
+  ]);
 });
 
 app.get("/health", (req, res) => {
