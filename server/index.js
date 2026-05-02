@@ -80,6 +80,7 @@ const ipJoinCount = new Map();
 const recentSkips = new Map();
 const userMeta = new Map();
 const activeChatMeta = new Map();
+const reconnectCodes = new Map(); // code → { socketId, expires }
 
 const CONVO_STARTERS = {
   vent: [
@@ -484,6 +485,16 @@ io.on("connection", socket => {
     }
   });
 
+  socket.on("submit_rating", ({ rating }) => {
+    if (!rating || rating < 1 || rating > 5) return;
+    if (rating >= 4) {
+      updateTrust(socket.id, 3);
+    } else if (rating <= 2) {
+      updateTrust(socket.id, -2);
+    }
+    console.log(`Rating submitted: ${rating}/5 from ${socket.id}`);
+  });
+
   socket.on("report_user", () => {
     const partnerId = activePairs.get(socket.id);
     if (!partnerId) return;
@@ -503,6 +514,25 @@ io.on("connection", socket => {
     }
 
     socket.emit("report_received");
+  });
+
+  socket.on("request_reconnect_code", () => {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    reconnectCodes.set(code, {
+      socketId: socket.id,
+      expires: Date.now() + 10 * 60 * 1000,
+    });
+    socket.emit("reconnect_code", { code });
+  });
+
+  socket.on("use_reconnect_code", ({ code }) => {
+    const entry = reconnectCodes.get(code);
+    if (!entry || Date.now() > entry.expires) {
+      socket.emit("code_invalid");
+      return;
+    }
+    reconnectCodes.delete(code);
+    socket.emit("code_valid", { partnerSocketId: entry.socketId });
   });
 
   socket.on("disconnect", () => {

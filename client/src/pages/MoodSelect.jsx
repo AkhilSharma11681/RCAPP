@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import ThemeToggle from '../components/ThemeToggle'
 import useCanonical from '../hooks/useCanonical'
+import { trackEvent } from '../utils/analytics'
 
 const moods = [
   { id: 'deep',    emoji: '🧠', label: 'Deep Talk',   desc: 'Real, thoughtful conversation' },
@@ -18,6 +19,8 @@ export default function MoodSelect({ onContinue, onBack, theme, onToggleTheme })
   const [chatMode, setChatMode] = useState('text')
 
   function handleContinue() {
+    trackEvent('mood_selected', { mood: selectedMood })
+    trackEvent('chat_mode_selected', { mode: chatMode })
     onContinue({ mood: selectedMood, intent: 'random', safeMode: false, chatMode })
   }
 

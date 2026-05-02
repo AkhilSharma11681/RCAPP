@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
+import FingerprintJS from '@fingerprintjs/fingerprintjs'
 import ThemeToggle from '../components/ThemeToggle'
 import useCanonical from '../hooks/useCanonical'
+import { trackEvent } from '../utils/analytics'
 
 const SERVER =
   window.location.hostname === 'localhost'
@@ -105,13 +107,10 @@ function randomFrom(list) {
   return list[Math.floor(Math.random() * list.length)]
 }
 
-function fingerprint() {
-  return 'fp_' + Math.random().toString(36).slice(2, 11)
-}
-
 export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', theme, onToggleTheme, onExit }) {
   useCanonical('https://www.miloo.chat/chat')
   const moodMeta = useMemo(() => getMoodMeta(mood), [mood])
+  const fingerprintRef = useRef('fp_' + Math.random().toString(36).slice(2, 11))
 
   const [status, setStatus] = useState(chatMode === 'text' ? 'text_connecting' : 'pre_permission')
   const [messages, setMessages] = useState([])
@@ -142,6 +141,9 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   const [onlineCount, setOnlineCount] = useState(null)
   const [rotatingMsg, setRotatingMsg] = useState(0)
   const [chatRating, setChatRating] = useState(0)
+  const [reconnectCode, setReconnectCode] = useState(null)
+  const [reconnectCodeCopied, setReconnectCodeCopied] = useState(false)
+  const [showSharePrompt, setShowSharePrompt] = useState(false)
   const miloMessagesEndRef = useRef(null)
   const miloTimerRef = useRef(null)
   const waitingTimeRef = useRef(null)
@@ -160,11 +162,20 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   const candidateQueueRef = useRef([])
   const typingTimeoutRef = useRef(null)
   const mediaModeRef = useRef('text')
+  const chatStartTimeRef = useRef(null)
 
   function emitTyping() {
     if (!partnerIdRef.current || !socketRef.current) return
     socketRef.current.emit('typing', { to: partnerIdRef.current })
   }
+
+  // Load real fingerprint on mount
+  useEffect(() => {
+    FingerprintJS.load()
+      .then(fp => fp.get())
+      .then(result => { fingerprintRef.current = result.visitorId })
+      .catch(() => { /* keep fallback value */ })
+  }, [])
 
   const ROTATING_MSGS = [
     'Koi interesting insaan dhoondh rahe hain... 🔍',
@@ -200,6 +211,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
             clearInterval(waitingTimeRef.current)
             isMiloActiveRef.current = true
             setIsMiloActive(true)
+            trackEvent('milo_activated', { waitSeconds: next })
             // Send Milo's opening message
             setMiloMessages([{
               role: 'assistant',
@@ -316,13 +328,16 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     setMiloMessages([])
     setWaitingTime(0)
     setChatRating(0)
+    setReconnectCode(null)
+    setReconnectCodeCopied(false)
+    setShowSharePrompt(false)
   }
 
   function initializeTextOnlySocket() {
     setStatus('waiting')
 
     const socket = io(SERVER, {
-      auth: { fingerprint: fingerprint() },
+      auth: { fingerprint: fingerprintRef.current },
       timeout: 20000,
     })
 
@@ -357,6 +372,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     })
 
     socket.on('match_found', ({ partnerId, starter: serverStarter }) => {
+      trackEvent('match_found', { mode: 'text' })
       // If Milo was active, let Milo say goodbye first
       if (isMiloActiveRef.current) {
         setMiloMessages(prev => [...prev, {
@@ -369,12 +385,16 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
           setStarter(serverStarter || '')
           setStatus('text_chat')
           resetAll()
+          chatStartTimeRef.current = Date.now()
+          trackEvent('chat_started', { mood, mode: 'text' })
         }, 1800)
       } else {
         partnerIdRef.current = partnerId
         setStarter(serverStarter || '')
         setStatus('text_chat')
         resetAll()
+        chatStartTimeRef.current = Date.now()
+        trackEvent('chat_started', { mood, mode: 'text' })
       }
     })
 
@@ -396,12 +416,22 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     })
 
     socket.on('partner_left', () => {
+      const duration = chatStartTimeRef.current ? Math.floor((Date.now() - chatStartTimeRef.current) / 1000) : 0
+      trackEvent('chat_ended', { duration_seconds: duration, ended_by: 'partner_left' })
       setStatus('partner_left')
     })
 
     socket.on('report_received', () => {
       setReportSent(true)
       systemMessage('Report received. Thanks for helping keep Miloo safe.')
+    })
+
+    socket.on('reconnect_code', ({ code }) => {
+      setReconnectCode(code)
+    })
+
+    socket.on('code_invalid', () => {
+      systemMessage('That code is invalid or has expired.')
     })
   }
 
@@ -428,7 +458,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     mediaModeRef.current = detectedMode
 
     const socket = io(SERVER, {
-      auth: { fingerprint: fingerprint() },
+      auth: { fingerprint: fingerprintRef.current },
       timeout: 20000,
     })
 
@@ -465,6 +495,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     })
 
     socket.on('match_found', async ({ partnerId, initiator, starter: serverStarter, partnerMediaMode: pMode }) => {
+      trackEvent('match_found', { mode: chatMode })
       // If Milo was active, let Milo say goodbye first
       if (isMiloActiveRef.current) {
         setMiloMessages(prev => [...prev, {
@@ -478,6 +509,8 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
           setStarter(serverStarter || '')
           setStatus('connected')
           resetAll()
+          chatStartTimeRef.current = Date.now()
+          trackEvent('chat_started', { mood, mode: chatMode })
           if (mediaModeRef.current !== 'text') {
             await startPC(initiator, socket, partnerId)
           }
@@ -488,6 +521,8 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
         setStarter(serverStarter || '')
         setStatus('connected')
         resetAll()
+        chatStartTimeRef.current = Date.now()
+        trackEvent('chat_started', { mood, mode: chatMode })
         if (mediaModeRef.current !== 'text') {
           await startPC(initiator, socket, partnerId)
         }
@@ -545,11 +580,19 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
       if (!chatFocused) setUnread(prev => prev + 1)
     })
 
+    socket.on('partner_typing', () => {
+      setPartnerTyping(true)
+      clearTimeout(typingTimeoutRef.current)
+      typingTimeoutRef.current = setTimeout(() => setPartnerTyping(false), 2000)
+    })
+
     socket.on('message_blocked', () => {
       systemMessage('Links and contact-sharing are blocked for safety.')
     })
 
     socket.on('partner_left', () => {
+      const duration = chatStartTimeRef.current ? Math.floor((Date.now() - chatStartTimeRef.current) / 1000) : 0
+      trackEvent('chat_ended', { duration_seconds: duration, ended_by: 'partner_left' })
       setStatus('partner_left')
       pcRef.current?.close()
       if (partnerVideoRef.current) partnerVideoRef.current.srcObject = null
@@ -558,6 +601,14 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     socket.on('report_received', () => {
       setReportSent(true)
       systemMessage('Report received. Thanks for helping keep Miloo safe.')
+    })
+
+    socket.on('reconnect_code', ({ code }) => {
+      setReconnectCode(code)
+    })
+
+    socket.on('code_invalid', () => {
+      systemMessage('That code is invalid or has expired.')
     })
   }
 
@@ -649,6 +700,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   }
 
   function findNext() {
+    trackEvent('skip_pressed')
     if (pcRef.current) {
       pcRef.current.close()
       pcRef.current = null
@@ -675,15 +727,19 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   function sendGoodConvo() {
     socketRef.current?.emit('good_convo')
     setGoodSent(true)
+    trackEvent('good_convo_sent')
+    setShowSharePrompt(true)
     systemMessage('Nice. We will use that feedback to improve future matches.')
   }
 
   function reportUser() {
     if (reportSent) return
+    trackEvent('report_sent')
     socketRef.current?.emit('report_user')
   }
 
   function shareApp() {
+    trackEvent('share_clicked')
     if (navigator.share) {
       navigator.share({ title: 'Miloo', text: 'Real conversations with real strangers — no signup!', url: 'https://www.miloo.chat' })
     } else {
@@ -1056,6 +1112,24 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
         />
       )}
 
+      {/* Typing indicator overlay for video mode */}
+      {partnerTyping && status === 'connected' && (
+        <div style={{
+          position: 'absolute',
+          bottom: '80px',
+          left: '16px',
+          background: 'rgba(0,0,0,0.6)',
+          padding: '6px 12px',
+          borderRadius: '12px',
+          color: 'white',
+          fontSize: '13px',
+          zIndex: 11,
+          backdropFilter: 'blur(8px)',
+        }}>
+          typing...
+        </div>
+      )}
+
       <div
         style={{
           position: 'absolute',
@@ -1271,12 +1345,44 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
                   <p style={{ color: 'var(--text-3)', fontSize: '13px', marginBottom: '8px' }}>Kaisi rahi baat?</p>
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                     {[1,2,3,4,5].map(star => (
-                      <button key={star} onClick={() => setChatRating(star)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', minWidth: '44px', minHeight: '44px' }}>⭐</button>
+                      <button key={star} onClick={() => {
+                        setChatRating(star)
+                        socketRef.current?.emit('submit_rating', { rating: star })
+                      }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', minWidth: '44px', minHeight: '44px' }}>⭐</button>
                     ))}
                   </div>
                 </div>
               )}
               {chatRating > 0 && <p style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: '600' }}>Shukriya! {'⭐'.repeat(chatRating)}</p>}
+
+              {/* Reconnect code section */}
+              <div style={{ textAlign: 'center', padding: '12px 16px', background: 'var(--surface-1)', borderRadius: '16px', border: '1px solid var(--border-1)', width: '100%', maxWidth: '280px' }}>
+                <p style={{ color: 'var(--text-3)', fontSize: '12px', marginBottom: '8px' }}>Want to chat with this person again?</p>
+                {reconnectCode ? (
+                  <div>
+                    <p style={{ color: 'var(--text-1)', fontSize: '22px', fontWeight: '900', letterSpacing: '0.12em', marginBottom: '8px' }}>{reconnectCode}</p>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard?.writeText(reconnectCode)
+                        setReconnectCodeCopied(true)
+                        setTimeout(() => setReconnectCodeCopied(false), 2000)
+                      }}
+                      style={{ background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: '999px', padding: '8px 18px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+                    >
+                      {reconnectCodeCopied ? 'Copied! ✅' : 'Copy Code'}
+                    </button>
+                    <p style={{ color: 'var(--text-4)', fontSize: '11px', marginTop: '6px' }}>Valid for 10 minutes</p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => socketRef.current?.emit('request_reconnect_code')}
+                    style={{ background: 'var(--surface-2)', color: 'var(--text-2)', border: '1px solid var(--border-1)', borderRadius: '999px', padding: '8px 18px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    Get Reconnect Code
+                  </button>
+                )}
+              </div>
+
               <Btn onClick={findNext}>Find Someone New</Btn>
               <button onClick={shareApp} style={{ background: 'var(--surface-1)', border: '1px solid var(--border-1)', color: 'var(--text-2)', borderRadius: '999px', padding: '10px 20px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', minHeight: '44px' }}>
                 Share Miloo 🔗
@@ -1593,6 +1699,42 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Share prompt popup — shown after good_convo */}
+      {showSharePrompt && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 30,
+          background: 'rgba(13,11,20,0.95)',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: '20px',
+          padding: '24px',
+          textAlign: 'center',
+          width: 'min(90vw, 320px)',
+          animation: 'msgPop 0.2s ease',
+        }}>
+          <p style={{ color: '#fff', fontSize: '16px', fontWeight: '700', marginBottom: '6px' }}>Having a great chat? Share Miloo! 🔗</p>
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', marginBottom: '16px' }}>Help your friends find real conversations too</p>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <button
+              onClick={() => { shareApp(); setShowSharePrompt(false) }}
+              style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '999px', padding: '10px 20px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}
+            >
+              Share
+            </button>
+            <button
+              onClick={() => setShowSharePrompt(false)}
+              style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '999px', padding: '10px 20px', fontSize: '14px', cursor: 'pointer' }}
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes msgPop {

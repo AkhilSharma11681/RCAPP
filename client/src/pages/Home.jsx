@@ -65,7 +65,7 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
           fontWeight: '900', letterSpacing: '-0.07em', lineHeight: 0.88,
           color: 'var(--text-1)', marginBottom: '16px',
         }}>
-          Miloo
+          Miloo — Free Random Chat
         </h1>
 
         <h2 style={{
@@ -196,15 +196,16 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
         justifyContent: 'center',
         gap: '8px 20px',
       }}>
-        <button
-          onClick={onTerms}
+        <a
+          href="/terms"
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
             color: 'var(--text-3)', fontSize: '13px', fontWeight: '500', padding: 0,
+            textDecoration: 'none',
           }}
         >
           Safety &amp; Terms
-        </button>
+        </a>
         <a
           href="/blog/omegle-alternative"
           style={{
