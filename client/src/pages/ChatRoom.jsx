@@ -222,7 +222,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
       waitingTimeRef.current = setInterval(() => {
         setWaitingTime(prev => {
           const next = prev + 1
-          if (next >= 10) {
+          if (next >= 15) {
             clearInterval(waitingTimeRef.current)
             isMiloActiveRef.current = true
             setIsMiloActive(true)
@@ -230,7 +230,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
             // Send Milo's opening message
             setMiloMessages([{
               role: 'assistant',
-              content: 'heyy, kaisa chal raha hai?',
+              content: "hey! what's up? 😊",
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             }])
           }
@@ -274,7 +274,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     } catch {
       setMiloMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Yaar connection slow hai... ek second 😅',
+        content: 'Connection slow... one sec 😅',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       }])
     } finally {
