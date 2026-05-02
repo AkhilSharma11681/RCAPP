@@ -27,7 +27,12 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (
+        !origin ||
+        origin === 'null' ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app')
+      ) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));
@@ -597,6 +602,7 @@ app.post("/api/milo", miloRateLimit, async (req, res) => {
 
 // ── Metered TURN credentials endpoint ──────────────────────────────
 app.get("/api/turn-credentials", async (req, res) => {
+  res.header("Access-Control-Allow-Origin", "*");
   console.log("TURN: API Key present:", !!process.env.METERED_API_KEY);
   console.log("TURN: API Key length:", process.env.METERED_API_KEY?.length);
   console.log("TURN: API Key first 4 chars:", process.env.METERED_API_KEY?.slice(0, 4));
@@ -606,15 +612,15 @@ app.get("/api/turn-credentials", async (req, res) => {
       return res.status(500).json({ error: "METERED_API_KEY not configured" });
     }
     const url = `https://miloo-chat.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`;
-    console.log("TURN: Fetching from URL:", `https://miloo-chat.metered.live/api/v1/turn/credentials?apiKey=${apiKey.slice(0, 4)}...`);
+    console.log("TURN: Fetching from URL:", url.slice(0, 60) + "...");
     const response = await fetch(url);
     console.log("TURN: Metered response status:", response.status);
     const data = await response.json();
     console.log("TURN: Credentials received, count:", Array.isArray(data) ? data.length : "not array");
     res.json(data);
   } catch (err) {
-    console.error("TURN credentials error:", err.message);
-    res.status(500).json({ error: "Failed to fetch TURN credentials" });
+    console.error("TURN: Error:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
