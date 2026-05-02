@@ -602,29 +602,34 @@ app.post("/api/milo", miloRateLimit, async (req, res) => {
 
 // ── Metered TURN credentials endpoint ──────────────────────────────
 app.get("/api/turn-credentials", (req, res) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  const username = process.env.METERED_USERNAME;
-  const credential = process.env.METERED_PASSWORD;
-  console.log("TURN: Username present:", !!username);
-  console.log("TURN: Password present:", !!credential);
+  const origin = req.headers.origin || req.headers.referer || "";
+  const allowed = [
+    "https://www.miloo.chat",
+    "https://miloo.chat",
+    "http://localhost:5173",
+  ];
+  const isAllowed = allowed.some(o => origin.startsWith(o));
+  if (!isAllowed) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   res.json([
     {
       urls: "stun:stun.l.google.com:19302",
     },
     {
       urls: "turn:global.relay.metered.ca:80",
-      username,
-      credential,
+      username: process.env.METERED_USERNAME,
+      credential: process.env.METERED_PASSWORD,
     },
     {
       urls: "turn:global.relay.metered.ca:443",
-      username,
-      credential,
+      username: process.env.METERED_USERNAME,
+      credential: process.env.METERED_PASSWORD,
     },
     {
       urls: "turns:global.relay.metered.ca:443",
-      username,
-      credential,
+      username: process.env.METERED_USERNAME,
+      credential: process.env.METERED_PASSWORD,
     },
   ]);
 });
