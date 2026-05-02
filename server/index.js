@@ -54,9 +54,22 @@ const io = new Server(server, {
 
 const SELF_URL = "https://rcapp-server.onrender.com";
 
+// Keep-alive ping — hits /health every 10 minutes to prevent Render cold starts
 setInterval(() => {
-  fetch(SELF_URL).catch(() => {});
-}, 14 * 60 * 1000);
+  fetch(`${SELF_URL}/health`)
+    .then(r => r.json())
+    .then(d => console.log("Ping ok:", d.status))
+    .catch(e => console.log("Ping failed:", e.message));
+}, 10 * 60 * 1000); // 10 minutes
+
+// Error recovery — prevent silent crashes
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled Rejection:", err);
+});
 
 const waitingQueue = [];
 const activePairs = new Map();
