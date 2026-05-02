@@ -595,6 +595,24 @@ app.post("/api/milo", miloRateLimit, async (req, res) => {
   }
 });
 
+// ── Metered TURN credentials endpoint ──────────────────────────────
+app.get("/api/turn-credentials", async (req, res) => {
+  try {
+    const apiKey = process.env.METERED_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: "METERED_API_KEY not configured" });
+    }
+    const response = await fetch(
+      `https://miloo-chat.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`
+    );
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error("TURN credentials error:", err.message);
+    res.status(500).json({ error: "Failed to fetch TURN credentials" });
+  }
+});
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok", uptime: process.uptime() });
 });

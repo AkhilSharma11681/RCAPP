@@ -17,6 +17,21 @@ const iceConfig = {
   ],
 }
 
+async function fetchTurnCredentials() {
+  try {
+    const res = await fetch(`${SERVER}/api/turn-credentials`)
+    const turnServers = await res.json()
+    // Metered returns an array of ICE server objects
+    if (Array.isArray(turnServers) && turnServers.length > 0) {
+      return { iceServers: turnServers }
+    }
+    return iceConfig
+  } catch {
+    // Fallback to STUN-only if TURN fetch fails
+    return iceConfig
+  }
+}
+
 const MOOD_META = {
   vent: {
     label: 'Vent',
@@ -532,7 +547,8 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     socket.on('webrtc_offer', async ({ offer, from }) => {
       try {
         partnerIdRef.current = from
-        const pc = createPC(socket, from)
+        const pcConfig = await fetchTurnCredentials()
+        const pc = createPC(socket, from, pcConfig)
         await pc.setRemoteDescription(new RTCSessionDescription(offer))
         
         while (candidateQueueRef.current.length > 0) {
@@ -612,12 +628,12 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     })
   }
 
-  function createPC(socket, partnerId) {
+  function createPC(socket, partnerId, pcConfig = iceConfig) {
     if (pcRef.current && pcRef.current.signalingState !== 'closed') {
       return pcRef.current
     }
 
-    const pc = new RTCPeerConnection(iceConfig)
+    const pc = new RTCPeerConnection(pcConfig)
     pcRef.current = pc
     candidateQueueRef.current = []
 
@@ -658,7 +674,8 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   }
 
   async function startPC(initiator, socket, partnerId) {
-    const pc = createPC(socket, partnerId)
+    const pcConfig = await fetchTurnCredentials()
+    const pc = createPC(socket, partnerId, pcConfig)
 
     if (initiator) {
       const offer = await pc.createOffer()
