@@ -39,6 +39,14 @@ function AppRoutes() {
     return () => window.removeEventListener('keydown', handleEsc)
   }, [location.pathname, navigate])
 
+  const startTextChat = () => {
+    goToChat({ mood: 'any', intent: 'random', safeMode: false, chatMode: 'text' })
+  }
+
+  const startVideoChat = () => {
+    goToChat({ mood: 'any', intent: 'random', safeMode: false, chatMode: 'video' })
+  }
+
   const goToMood = () => navigate('/mood')
 
   const goToChat = ({ mood, intent, safeMode: safe, chatMode: mode }) => {
@@ -63,7 +71,8 @@ function AppRoutes() {
         path="/"
         element={
           <Home
-            onStart={goToMood}
+            onStartText={startTextChat}
+            onStartVideo={startVideoChat}
             onTerms={() => navigate('/terms')}
             theme={theme}
             onToggleTheme={toggleTheme}
