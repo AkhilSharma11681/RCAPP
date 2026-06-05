@@ -8,16 +8,17 @@ const SERVER =
     ? 'http://localhost:3001'
     : 'https://rcapp-server.onrender.com'
 
-export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
+export default function Home({ onStartText, onStartVideo, onTerms, theme, onToggleTheme }) {
   useCanonical('https://www.miloo.chat/')
   const navigate = useNavigate()
   const [liveStats, setLiveStats] = useState(null)
 
   useEffect(() => {
-    fetch(SERVER).then(r => r.json()).then(setLiveStats).catch(() => {})
-    const t = setInterval(() => {
-      fetch(SERVER).then(r => r.json()).then(setLiveStats).catch(() => {})
-    }, 15000)
+    // REQ-SEC-06: hit enriched /api/health for onlineUsers count
+    const url = `${SERVER}/api/health`
+    const load = () => fetch(url).then(r => r.json()).then(setLiveStats).catch(() => {})
+    load()
+    const t = setInterval(load, 10000)
     return () => clearInterval(t)
   }, [])
 
@@ -36,19 +37,21 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
           miloo
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {liveStats && (liveStats.active_pairs > 0 || liveStats.waiting_users > 0) && (
+          {/* REQ-UX-01 / REQ-FB-01: always-visible online counter; "Be the first..." when empty */}
+          {liveStats && (
             <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '5px 12px', borderRadius: '999px',
+              display: 'inline-flex', alignItems: 'center', gap: '8px',
+              padding: '6px 14px', borderRadius: '999px',
               background: 'var(--accent-dim)', border: '1px solid var(--accent-border)',
-              color: 'var(--accent)', fontSize: '12px', fontWeight: '700',
+              color: 'var(--accent)', fontSize: '13px', fontWeight: '700',
             }}>
-              <span className="blink" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
-              {liveStats.active_pairs > 0
-                ? `🟢 ${liveStats.active_pairs * 2} chatting now`
-                : `🟢 ${liveStats.waiting_users} waiting`}
+              <span className="blink" style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
+              {(liveStats.onlineUsers ?? ((liveStats.active_pairs || 0) * 2 + (liveStats.waiting_users || 0))) > 0
+                ? `🟢 ${(liveStats.onlineUsers ?? ((liveStats.active_pairs || 0) * 2 + (liveStats.waiting_users || 0)))} people online now`
+                : 'Be the first to start a conversation ✨'}
             </div>
           )}
+
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
         </div>
       </nav>
@@ -99,13 +102,22 @@ export default function Home({ onStart, onTerms, theme, onToggleTheme }) {
           display: 'flex', flexDirection: 'column', gap: '12px',
           width: '100%', maxWidth: '300px', marginBottom: '40px',
         }}>
-          <button onClick={onStart} style={{
-            padding: '18px 32px', fontSize: '17px', fontWeight: '700',
+          <button onClick={onStartText} style={{
+            padding: '16px 32px', fontSize: '16px', fontWeight: '700',
+            background: 'var(--surface-2)', color: 'var(--text-1)',
+            borderRadius: '999px', border: '1px solid var(--border-1)', cursor: 'pointer',
+            transition: 'all 0.2s ease',
+          }}>
+            Start Text Chat
+          </button>
+          <button onClick={onStartVideo} style={{
+            padding: '16px 32px', fontSize: '16px', fontWeight: '700',
             background: 'var(--accent)', color: 'var(--accent-text)',
             borderRadius: '999px', border: 'none', cursor: 'pointer',
             boxShadow: 'var(--accent-glow)',
+            transition: 'all 0.2s ease',
           }}>
-            Start Chatting →
+            📹 Start Video Chat
           </button>
           <a href="/terms" style={{
             color: 'inherit', textDecoration: 'none',

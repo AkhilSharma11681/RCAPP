@@ -3,12 +3,40 @@ import { io } from 'socket.io-client'
 import FingerprintJS from '@fingerprintjs/fingerprintjs'
 import ThemeToggle from '../components/ThemeToggle'
 import useCanonical from '../hooks/useCanonical'
-import { trackEvent } from '../utils/analytics'
+import { trackEvent, markFirstMatch } from '../utils/analytics'
+
 
 const SERVER =
   window.location.hostname === 'localhost'
     ? 'http://localhost:3001'
     : 'https://rcapp-server.onrender.com'
+
+const FALLBACK_PERSONAS = [
+  { key: 'Milo', label: 'Milo', emoji: '🤎', tagline: 'Warm & steady', description: 'A gentle, curious listener who makes you feel at home.' },
+  { key: 'Mira', label: 'Mira', emoji: '💜', tagline: 'Playful & bright', description: 'A bubbly, witty friend who keeps the energy high.' },
+  { key: 'Jax', label: 'Jax', emoji: '🖤', tagline: 'Sarcastic & sharp', description: 'A dry-humored, deadpan friend who tells it like it is.' },
+]
+
+const FALLBACK_OPENERS = {
+  vent: ["Hey, I'm here. Want to vent for a bit?", "Rough day? I'm all ears.", "Tell me what's going on — no judgment."],
+  laugh: ["Okay okay, hit me with your worst joke.", "I need a laugh too — go.", "Tell me the dumbest thing that happened today."],
+  music: ["What's the song stuck in your head right now?", "Drop a track recommendation on me.", "What artist have you been defending lately?"],
+  deep: ["What's been on your mind lately?", "Tell me something you've been thinking about.", "I want the real answer — how are you, actually?"],
+  gaming: ["What game could you replay forever?", "Controller or keyboard? Choose your fighter.", "What's your K/D on life this week?"],
+  culture: ["Where are you from?", "What's a food everyone should try once?", "Best custom from your culture?"],
+  any: ["Hey! How's it going?", "Tell me something interesting.", "What's the vibe tonight?"],
+}
+
+function getGoodbyeForPersona(persona) {
+  if (persona === 'Mira') {
+    return "Ooh, a match! Time for me to skip. Go have fun! Bye 💜"
+  }
+  if (persona === 'Jax') {
+    return "Your match is here. I'm out of here. Don't make it awkward. Bye 🖤"
+  }
+  return "Someone is here! Connecting you now. Have a wonderful chat! Bye 🤎"
+}
+
 
 const iceConfig = {
   iceServers: [
@@ -159,10 +187,25 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   const [reconnectCode, setReconnectCode] = useState(null)
   const [reconnectCodeCopied, setReconnectCodeCopied] = useState(false)
   const [showSharePrompt, setShowSharePrompt] = useState(false)
+  const [slowDownSeconds, setSlowDownSeconds] = useState(0)
+  const [justMatched, setJustMatched] = useState(false)
+  const [miloPersona, setMiloPersona] = useState(null)
+  const [miloPersonaOptions, setMiloPersonaOptions] = useState([])
+  const [miloOpeners, setMiloOpeners] = useState(null)
   const miloMessagesEndRef = useRef(null)
+
   const miloTimerRef = useRef(null)
   const waitingTimeRef = useRef(null)
   const rotatingMsgRef = useRef(null)
+  const slowDownTimerRef = useRef(null)
+  const statusRef = useRef(status)
+  statusRef.current = status
+  const findNextRef = useRef(null)
+  const moodRef = useRef(mood)
+  const intentRef = useRef(intent)
+  const chatModeRef = useRef(chatMode)
+  const mediaModeRefState = useRef('text')
+  const camErrorRetriedRef = useRef(false)
 
   const socketRef = useRef(null)
   const pcRef = useRef(null)
@@ -184,12 +227,20 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     socketRef.current.emit('typing', { to: partnerIdRef.current })
   }
 
-  // Load real fingerprint on mount
+  // Load real fingerprint on mount and fetch Milo openers
   useEffect(() => {
     FingerprintJS.load()
       .then(fp => fp.get())
       .then(result => { fingerprintRef.current = result.visitorId })
       .catch(() => { /* keep fallback value */ })
+
+    fetch(`${SERVER}/api/milo/openers`)
+      .then(r => r.json())
+      .then(data => {
+        setMiloPersonaOptions(data.personas)
+        setMiloOpeners(data.openers)
+      })
+      .catch(() => { /* keep fallback values */ })
   }, [])
 
   const ROTATING_MSGS = [
@@ -215,24 +266,32 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     return () => clearInterval(rotatingMsgRef.current)
   }, [])
 
-  // Milo trigger — after 10s of waiting with no match
+  // Milo trigger — after 8s of waiting in text or 15s in video
   useEffect(() => {
     const isWaiting = ['waiting', 'text_connecting'].includes(status)
+    const isTextMode = chatMode === 'text' || mediaModeRef.current === 'text'
+    const threshold = isTextMode ? 8 : 15
+
     if (isWaiting && !isMiloActive) {
       waitingTimeRef.current = setInterval(() => {
         setWaitingTime(prev => {
           const next = prev + 1
-          if (next >= 15) {
+          if (next >= threshold) {
             clearInterval(waitingTimeRef.current)
             isMiloActiveRef.current = true
             setIsMiloActive(true)
             trackEvent('milo_activated', { waitSeconds: next })
-            // Send Milo's opening message
-            setMiloMessages([{
-              role: 'assistant',
-              content: "hey! what's up? 😊",
-              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            }])
+            // If persona is already set, send opening message directly!
+            if (miloPersona) {
+              const list = (miloOpeners && miloOpeners[mood]) || (miloOpeners && miloOpeners.any) || (FALLBACK_OPENERS[mood] || FALLBACK_OPENERS.any)
+              const opener = list[Math.floor(Math.random() * list.length)]
+              setMiloMessages([{
+                role: 'assistant',
+                content: opener,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              }])
+              trackEvent('milo_2_activated', { persona: miloPersona, mood })
+            }
           }
           return next
         })
@@ -242,7 +301,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
       if (!isWaiting) setWaitingTime(0)
     }
     return () => clearInterval(waitingTimeRef.current)
-  }, [status, isMiloActive])
+  }, [status, isMiloActive, chatMode, miloPersona, miloOpeners, mood])
 
   // Scroll Milo messages
   useEffect(() => {
@@ -260,12 +319,17 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     setMiloInput('')
     setMiloTyping(true)
 
+    trackEvent('milo_2_message_sent', { persona: miloPersona })
+
     try {
       const res = await fetch(`${SERVER}/api/milo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: updated.map(m => ({ role: m.role, content: m.content })),
+          persona: miloPersona,
+          fingerprint: fingerprintRef.current,
+          mood: mood,
         }),
       })
       const data = await res.json()
@@ -280,6 +344,18 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     } finally {
       setMiloTyping(false)
     }
+  }
+
+  const selectPersona = (personaKey) => {
+    setMiloPersona(personaKey)
+    const list = (miloOpeners && miloOpeners[mood]) || (miloOpeners && miloOpeners.any) || (FALLBACK_OPENERS[mood] || FALLBACK_OPENERS.any)
+    const opener = list[Math.floor(Math.random() * list.length)]
+    setMiloMessages([{
+      role: 'assistant',
+      content: opener,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }])
+    trackEvent('milo_2_activated', { persona: personaKey, mood })
   }
 
   useEffect(() => {
@@ -319,7 +395,8 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     return () => {
       clearInterval(waitingHintRef.current)
       clearInterval(waitingTimerRef.current)
-      pcRef.current?.close()
+      clearInterval(slowDownTimerRef.current)
+      closePC()
       myStreamRef.current?.getTracks().forEach(track => track.stop())
       socketRef.current?.disconnect()
     }
@@ -379,39 +456,61 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
 
     socket.on('slow_down', ({ waitSeconds }) => {
       setStatus('slow_down')
-      systemMessage(`Too many fast skips. Try again in ${waitSeconds}s.`)
-      setTimeout(() => {
-        setStatus('waiting')
-        socket.emit('find_match', { mood, intent, textOnly: true })
-      }, waitSeconds * 1000)
+      setSlowDownSeconds(waitSeconds)
+      systemMessage(`Too many fast skips. Take a breath ✋`)
+      clearInterval(slowDownTimerRef.current)
+      slowDownTimerRef.current = setInterval(() => {
+        setSlowDownSeconds(prev => {
+          if (prev <= 1) {
+            clearInterval(slowDownTimerRef.current)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
     })
 
     socket.on('match_found', ({ partnerId, starter: serverStarter }) => {
       trackEvent('match_found', { mode: 'text' })
+      if (markFirstMatch()) {
+        systemMessage('🎉 First chat! Say hi to break the ice.')
+        trackEvent('first_match', { mood, mode: 'text' })
+      }
       // If Milo was active, let Milo say goodbye first
       if (isMiloActiveRef.current) {
+        const goodbyeText = getGoodbyeForPersona(miloPersona)
         setMiloMessages(prev => [...prev, {
           role: 'assistant',
-          content: 'Someone just joined! Connecting you now 😊 It was fun talking! Bye 👋',
+          content: goodbyeText,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }])
+        trackEvent('milo_2_handoff_completed', { persona: miloPersona })
         setTimeout(() => {
+          setJustMatched(true)
+          setTimeout(() => {
+            setJustMatched(false)
+            partnerIdRef.current = partnerId
+            setStarter(serverStarter || '')
+            setStatus('text_chat')
+            resetAll()
+            chatStartTimeRef.current = Date.now()
+            trackEvent('chat_started', { mood, mode: 'text' })
+          }, 1500)
+        }, 1800)
+      } else {
+        setJustMatched(true)
+        setTimeout(() => {
+          setJustMatched(false)
           partnerIdRef.current = partnerId
           setStarter(serverStarter || '')
           setStatus('text_chat')
           resetAll()
           chatStartTimeRef.current = Date.now()
           trackEvent('chat_started', { mood, mode: 'text' })
-        }, 1800)
-      } else {
-        partnerIdRef.current = partnerId
-        setStarter(serverStarter || '')
-        setStatus('text_chat')
-        resetAll()
-        chatStartTimeRef.current = Date.now()
-        trackEvent('chat_started', { mood, mode: 'text' })
+        }, 1500)
       }
     })
+
 
     socket.on('receive_message', ({ message }) => {
       const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -454,21 +553,35 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     setStatus('connecting')
 
     let detectedMode = 'text'
+    let stream = null
+
+    // Try video+audio first. Permission-denied is fatal — show the cam_error
+    // screen and let the user decide to continue as text only.
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      myStreamRef.current = stream
-      if (myVideoRef.current) myVideoRef.current.srcObject = stream
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       detectedMode = 'video'
-    } catch {
+    } catch (err) {
+      if (err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || err.name === 'SecurityError')) {
+        setStatus('cam_error')
+        return
+      }
+      // NotAllowed denied only the video track. Try audio-only.
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true })
-        myStreamRef.current = stream
+        stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true })
         detectedMode = 'audio'
-      } catch {
-        myStreamRef.current = null
+      } catch (err2) {
+        if (err2 && (err2.name === 'NotAllowedError' || err2.name === 'PermissionDeniedError' || err2.name === 'SecurityError')) {
+          setStatus('cam_error')
+          return
+        }
+        // Hardware unavailable — silently fall back to text chat
         detectedMode = 'text'
+        stream = null
       }
     }
+
+    myStreamRef.current = stream
+    if (myVideoRef.current && stream) myVideoRef.current.srcObject = stream
     setMyMediaMode(detectedMode)
     mediaModeRef.current = detectedMode
 
@@ -485,6 +598,16 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
       setStatus('waking')
     }, 4000)
 
+    // If the socket reconnects after a drop, re-emit find_match so the
+    // server knows we're still looking (especially for waking or slow_down states).
+    socket.io.on('reconnect', () => {
+      console.log('Socket reconnected')
+      const s = statusRef.current
+      if (s === 'waiting' || s === 'waking' || s === 'slow_down') {
+        socket.emit('find_match', { mood, intent, mediaMode: mediaModeRef.current })
+      }
+    })
+
     socket.on('connect', () => {
       clearTimeout(wakeTimeout)
       setStatus('waiting')
@@ -494,31 +617,63 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     socket.on('connect_error', () => {
       clearTimeout(wakeTimeout)
       setStatus('waking')
-      // Keep trying — socket.io will auto-reconnect
     })
 
     socket.on('waiting', () => setStatus('waiting'))
     socket.on('server_busy', () => setStatus('busy'))
 
+    // slow_down: show a live countdown. Never auto-loop.
     socket.on('slow_down', ({ waitSeconds }) => {
       setStatus('slow_down')
-      systemMessage(`Too many fast skips. Try again in ${waitSeconds}s.`)
-      setTimeout(() => {
-        setStatus('waiting')
-        socket.emit('find_match', { mood, intent, mediaMode: mediaModeRef.current })
-      }, waitSeconds * 1000)
+      setSlowDownSeconds(waitSeconds)
+      systemMessage(`Too many fast skips. Take a breath ✋`)
+      clearInterval(slowDownTimerRef.current)
+      slowDownTimerRef.current = setInterval(() => {
+        setSlowDownSeconds(prev => {
+          if (prev <= 1) {
+            clearInterval(slowDownTimerRef.current)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
     })
 
     socket.on('match_found', async ({ partnerId, initiator, starter: serverStarter, partnerMediaMode: pMode }) => {
       trackEvent('match_found', { mode: chatMode })
-      // If Milo was active, let Milo say goodbye first
+      if (markFirstMatch()) {
+        systemMessage('🎉 First chat! Say hi to break the ice.')
+        trackEvent('first_match', { mood, mode: chatMode })
+      }
+
       if (isMiloActiveRef.current) {
+        const goodbyeText = getGoodbyeForPersona(miloPersona)
         setMiloMessages(prev => [...prev, {
           role: 'assistant',
-          content: 'Someone just joined! Connecting you now 😊 It was fun talking! Bye 👋',
+          content: goodbyeText,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }])
+        trackEvent('milo_2_handoff_completed', { persona: miloPersona })
         setTimeout(async () => {
+          setJustMatched(true)
+          setTimeout(async () => {
+            setJustMatched(false)
+            partnerIdRef.current = partnerId
+            setPartnerMediaMode(pMode ?? 'text')
+            setStarter(serverStarter || '')
+            setStatus('connected')
+            resetAll()
+            chatStartTimeRef.current = Date.now()
+            trackEvent('chat_started', { mood, mode: chatMode })
+            if (mediaModeRef.current !== 'text') {
+              await startPC(initiator, socket, partnerId)
+            }
+          }, 1500)
+        }, 1800)
+      } else {
+        setJustMatched(true)
+        setTimeout(async () => {
+          setJustMatched(false)
           partnerIdRef.current = partnerId
           setPartnerMediaMode(pMode ?? 'text')
           setStarter(serverStarter || '')
@@ -529,18 +684,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
           if (mediaModeRef.current !== 'text') {
             await startPC(initiator, socket, partnerId)
           }
-        }, 1800)
-      } else {
-        partnerIdRef.current = partnerId
-        setPartnerMediaMode(pMode ?? 'text')
-        setStarter(serverStarter || '')
-        setStatus('connected')
-        resetAll()
-        chatStartTimeRef.current = Date.now()
-        trackEvent('chat_started', { mood, mode: chatMode })
-        if (mediaModeRef.current !== 'text') {
-          await startPC(initiator, socket, partnerId)
-        }
+        }, 1500)
       }
     })
 
@@ -610,8 +754,14 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
       const duration = chatStartTimeRef.current ? Math.floor((Date.now() - chatStartTimeRef.current) / 1000) : 0
       trackEvent('chat_ended', { duration_seconds: duration, ended_by: 'partner_left' })
       setStatus('partner_left')
-      pcRef.current?.close()
+      closePC()
       if (partnerVideoRef.current) partnerVideoRef.current.srcObject = null
+      // Auto-resume if the chat lasted more than 15s (avoid rewarding instant-skips)
+      if (duration > 15) {
+        setTimeout(() => {
+          if (statusRef.current === 'partner_left') findNext()
+        }, 2500)
+      }
     })
 
     socket.on('report_received', () => {
@@ -645,7 +795,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
       if (partnerVideoRef.current) {
         // Use the first stream provided, or create a new one if none exist
         const stream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track])
-        
+
         // If we already have a srcObject and it's a MediaStream, just add the new track to it
         // Otherwise, set the whole stream as the srcObject
         if (partnerVideoRef.current.srcObject && partnerVideoRef.current.srcObject instanceof MediaStream) {
@@ -670,7 +820,44 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
       }
     }
 
+    // Monitor ICE health — frozen video, NAT timeouts, network changes
+    pc.oniceconnectionstatechange = () => {
+      const state = pc.iceConnectionState
+      console.log('ICE state:', state)
+      if (state === 'failed') {
+        // Try ICE restart first; if it doesn't recover in 5s, treat as drop
+        try { pc.restartIce?.() } catch (e) { /* no-op */ }
+        setTimeout(() => {
+          if (pcRef.current && pcRef.current.iceConnectionState === 'failed') {
+            socket.emit('peer_dropped', { to: partnerId })
+            setStatus('partner_left')
+          }
+        }, 5000)
+      } else if (state === 'disconnected') {
+        setTimeout(() => {
+          if (pcRef.current && pcRef.current.iceConnectionState === 'disconnected') {
+            socket.emit('peer_dropped', { to: partnerId })
+            setStatus('partner_left')
+          }
+        }, 8000)
+      }
+    }
+
     return pc
+  }
+
+  function closePC() {
+    if (pcRef.current) {
+      // Null out listeners so a stale event after teardown can't trigger
+      // a webrtc_offer/ice_candidate to the wrong partner.
+      pcRef.current.onicecandidate = null
+      pcRef.current.ontrack = null
+      pcRef.current.oniceconnectionstatechange = null
+      pcRef.current.onconnectionstatechange = null
+      try { pcRef.current.close() } catch (e) { /* no-op */ }
+      pcRef.current = null
+    }
+    candidateQueueRef.current = []
   }
 
   async function startPC(initiator, socket, partnerId) {
@@ -718,11 +905,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
 
   function findNext() {
     trackEvent('skip_pressed')
-    if (pcRef.current) {
-      pcRef.current.close()
-      pcRef.current = null
-    }
-
+    closePC()
     if (partnerVideoRef.current) partnerVideoRef.current.srcObject = null
 
     setStatus('waiting')
@@ -734,6 +917,15 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
     } else {
       socketRef.current?.emit('find_match', { mood, intent, mediaMode: mediaModeRef.current })
     }
+  }
+
+  function continueAsText() {
+    // Called from the cam_error screen. Connects as text-only without camera/mic.
+    setStatus('connecting')
+    mediaModeRef.current = 'text'
+    setMyMediaMode('text')
+    myStreamRef.current = null
+    initializeTextOnlySocket()
   }
 
   function sendPrompt(prompt) {
@@ -828,6 +1020,24 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
             fontSize: '16px', fontWeight: '700', boxShadow: 'var(--accent-glow)',
           }}>
             Allow Camera & Find Match →
+          </button>
+
+          <button
+            onClick={continueAsText}
+            style={{
+              marginTop: '12px',
+              width: '100%',
+              background: 'none',
+              border: 'none',
+              color: 'var(--accent)',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              display: 'block',
+            }}
+          >
+            💬 Skip camera — chat by text first
           </button>
 
           <button onClick={onExit} style={{
@@ -1064,13 +1274,34 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   if (status === 'cam_error') {
     return (
       <Center>
-        <div style={{ textAlign: 'center', maxWidth: '320px', padding: '24px' }}>
+        <div style={{ textAlign: 'center', maxWidth: '340px', padding: '24px' }}>
           <div style={{ fontSize: '50px' }}>📷</div>
-          <h3 style={{ color: 'var(--text-1)', marginTop: '16px', fontSize: '26px' }}>Camera access is required</h3>
+          <h3 style={{ color: 'var(--text-1)', marginTop: '16px', fontSize: '24px' }}>No camera? No problem.</h3>
           <p style={{ color: 'var(--text-3)', marginTop: '10px', fontSize: '14px', lineHeight: 1.6 }}>
-            Allow camera and microphone permissions in the browser, then try again.
+            You can still chat with people over text. Or allow camera & mic access in your browser settings to try again.
           </p>
-          <Btn onClick={onExit} style={{ marginTop: '24px' }}>Go Back</Btn>
+          <button onClick={continueAsText} style={{
+            marginTop: '20px', width: '100%', padding: '14px 18px',
+            borderRadius: '999px', border: 'none', cursor: 'pointer',
+            background: 'var(--accent)', color: 'var(--accent-text)',
+            fontSize: '15px', fontWeight: '700',
+          }}>
+            Continue as Text Only →
+          </button>
+          <button onClick={initializeMediaAndSocket} style={{
+            marginTop: '10px', width: '100%', padding: '13px 18px',
+            borderRadius: '999px', border: '1px solid var(--border-1)', cursor: 'pointer',
+            background: 'var(--surface-1)', color: 'var(--text-2)',
+            fontSize: '14px', fontWeight: '600',
+          }}>
+            Try Camera Again
+          </button>
+          <button onClick={onExit} style={{
+            marginTop: '10px', background: 'none', border: 'none',
+            color: 'var(--text-4)', fontSize: '13px', cursor: 'pointer', padding: '6px 0',
+          }}>
+            ← Go back
+          </button>
         </div>
       </Center>
     )
@@ -1092,7 +1323,27 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
   }
 
   return (
+    <>
+    {/* REQ-FB-03: 1.5s celebration overlay (sits above the video mode) */}
+    {justMatched && (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(99,102,241,0.18)', backdropFilter: 'blur(6px)',
+        animation: 'msgPop 0.2s ease', pointerEvents: 'none',
+      }}>
+        <div style={{
+          padding: '24px 40px', borderRadius: '20px',
+          background: 'var(--accent)', color: 'var(--accent-text)',
+          fontSize: '24px', fontWeight: '900', letterSpacing: '-0.02em',
+          boxShadow: '0 20px 60px rgba(99,102,241,0.5)',
+        }}>
+          🎉 Connected!
+        </div>
+      </div>
+    )}
     <div style={{ height: '100dvh', background: '#000', position: 'relative', overflow: 'hidden' }}>
+
       {partnerMediaMode && partnerMediaMode !== 'video' ? (
         <div style={{
           position: 'absolute',
@@ -1256,7 +1507,7 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
                   <span style={{ fontSize: '20px', fontWeight: '900', color: 'var(--text-1)', letterSpacing: '-0.04em' }}>miloo</span>
                   <Pill color="rgba(99,102,241,0.08)" border="rgba(99,102,241,0.25)" text="var(--accent)">
                     <span className="blink" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
-                    Milo
+                    {miloPersona || 'Milo'}
                   </Pill>
                 </div>
                 <button onClick={onExit} style={{
@@ -1266,57 +1517,106 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
                 }}>Exit</button>
               </div>
 
-              {/* Messages */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {miloMessages.map((msg, i) => (
-                  <div key={i} style={{
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                    animation: 'msgPop 0.18s ease',
+              {!miloPersona ? (
+                /* 3-card inline picker panel */
+                <div style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '24px 20px',
+                  gap: '20px',
+                  overflowY: 'auto',
+                }}>
+                  <h3 style={{ color: 'var(--text-1)', fontSize: '20px', fontWeight: '800', textAlign: 'center', margin: 0 }}>
+                    Select your Milo Companion V2.0 ✨
+                  </h3>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                    gap: '12px',
+                    width: '100%',
+                    maxWidth: '500px',
                   }}>
-                    <div style={{
-                      maxWidth: '75%', padding: '12px 16px',
-                      borderRadius: msg.role === 'user' ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
-                      background: msg.role === 'user' ? 'var(--accent)' : 'var(--surface-2)',
-                      color: msg.role === 'user' ? 'var(--accent-text)' : 'var(--text-1)',
-                      fontSize: '15px', lineHeight: 1.5, wordBreak: 'break-word',
-                      border: msg.role === 'user' ? 'none' : '1px solid var(--border-1)',
-                    }}>{msg.content}</div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-4)', marginTop: '4px', paddingLeft: '6px', paddingRight: '6px' }}>{msg.time}</span>
+                    {(miloPersonaOptions && miloPersonaOptions.length > 0 ? miloPersonaOptions : FALLBACK_PERSONAS).map(p => (
+                      <div
+                        key={p.key}
+                        onClick={() => selectPersona(p.key)}
+                        style={{
+                          padding: '20px 16px',
+                          borderRadius: '20px',
+                          background: 'var(--surface-1)',
+                          border: '1px solid var(--border-1)',
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                        }}
+                        className="card-hover"
+                      >
+                        <div style={{ fontSize: '32px', marginBottom: '8px' }}>{p.emoji}</div>
+                        <div style={{ color: 'var(--text-1)', fontWeight: '800', fontSize: '16px' }}>{p.label}</div>
+                        <div style={{ color: 'var(--accent)', fontSize: '12px', fontWeight: '600', marginTop: '2px' }}>{p.tagline}</div>
+                        <div style={{ color: 'var(--text-3)', fontSize: '11px', lineHeight: 1.4, marginTop: '8px' }}>{p.description}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {miloTyping && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0' }}>
-                    <div style={{ display: 'flex', gap: '5px', padding: '12px 16px', background: 'var(--surface-2)', borderRadius: '20px 20px 20px 4px', border: '1px solid var(--border-1)' }}>
-                      <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
+                </div>
+              ) : (
+                <>
+                  {/* Messages */}
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {miloMessages.map((msg, i) => (
+                      <div key={i} style={{
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                        animation: 'msgPop 0.18s ease',
+                      }}>
+                        <div style={{
+                          maxWidth: '75%', padding: '12px 16px',
+                          borderRadius: msg.role === 'user' ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
+                          background: msg.role === 'user' ? 'var(--accent)' : 'var(--surface-2)',
+                          color: msg.role === 'user' ? 'var(--accent-text)' : 'var(--text-1)',
+                          fontSize: '15px', lineHeight: 1.5, wordBreak: 'break-word',
+                          border: msg.role === 'user' ? 'none' : '1px solid var(--border-1)',
+                        }}>{msg.content}</div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-4)', marginTop: '4px', paddingLeft: '6px', paddingRight: '6px' }}>{msg.time}</span>
+                      </div>
+                    ))}
+                    {miloTyping && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0' }}>
+                        <div style={{ display: 'flex', gap: '5px', padding: '12px 16px', background: 'var(--surface-2)', borderRadius: '20px 20px 20px 4px', border: '1px solid var(--border-1)' }}>
+                          <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
+                        </div>
+                      </div>
+                    )}
+                    <div ref={miloMessagesEndRef} />
+                  </div>
+
+                  {/* Input bar — identical to normal chat */}
+                  <div style={{ padding: '16px 20px 20px', borderTop: '1px solid var(--border-1)', flexShrink: 0 }}>
+                    <div style={{
+                      display: 'flex', gap: '10px', alignItems: 'center',
+                      background: 'var(--surface-1)', borderRadius: '999px',
+                      padding: '8px 8px 8px 18px', border: '1px solid var(--border-1)',
+                    }}>
+                      <input
+                        value={miloInput}
+                        onChange={e => setMiloInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && sendMiloMessage()}
+                        placeholder="Type a message..."
+                        style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text-1)', fontSize: '15px', outline: 'none' }}
+                      />
+                      <button onClick={() => sendMiloMessage()} style={{
+                        background: miloInput.trim() ? 'var(--accent)' : 'var(--surface-2)',
+                        color: miloInput.trim() ? 'var(--accent-text)' : 'var(--text-3)',
+                        border: 'none', borderRadius: '50%', width: '40px', height: '40px',
+                        fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>↑</button>
                     </div>
                   </div>
-                )}
-                <div ref={miloMessagesEndRef} />
-              </div>
-
-              {/* Input bar — identical to normal chat */}
-              <div style={{ padding: '16px 20px 20px', borderTop: '1px solid var(--border-1)', flexShrink: 0 }}>
-                <div style={{
-                  display: 'flex', gap: '10px', alignItems: 'center',
-                  background: 'var(--surface-1)', borderRadius: '999px',
-                  padding: '8px 8px 8px 18px', border: '1px solid var(--border-1)',
-                }}>
-                  <input
-                    value={miloInput}
-                    onChange={e => setMiloInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && sendMiloMessage()}
-                    placeholder="Type a message..."
-                    style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text-1)', fontSize: '15px', outline: 'none' }}
-                  />
-                  <button onClick={() => sendMiloMessage()} style={{
-                    background: miloInput.trim() ? 'var(--accent)' : 'var(--surface-2)',
-                    color: miloInput.trim() ? 'var(--accent-text)' : 'var(--text-3)',
-                    border: 'none', borderRadius: '50%', width: '40px', height: '40px',
-                    fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>↑</button>
-                </div>
-              </div>
+                </>
+              )}
             </div>
           ) : (
             <>
@@ -1330,14 +1630,20 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
 
           <div style={{ textAlign: 'center', maxWidth: '360px', marginTop: '22px' }}>
             <p style={{ color: 'var(--text-1)', fontSize: '26px', fontWeight: '800', lineHeight: 1.15 }}>
-              {status === 'partner_left' ? 'That chat ended' : 'Finding your match...'}
+              {status === 'partner_left'
+                ? 'That chat ended'
+                : status === 'slow_down'
+                  ? `Take a breath ✋`
+                  : 'Finding your match...'}
             </p>
             <p style={{ color: 'var(--text-3)', fontSize: '15px', marginTop: '10px', lineHeight: 1.6 }}>
               {status === 'partner_left'
                 ? 'Hit next to meet someone new on the same vibe.'
-                : matchSeconds > 30
-                  ? 'Not many people online right now. Try a different mood or check back later.'
-                  : ROTATING_MSGS[rotatingMsg]}
+                : status === 'slow_down'
+                  ? `Try again in ${slowDownSeconds} s`
+                  : matchSeconds > 30
+                    ? 'Not many people online right now. Try a different mood or check back later.'
+                    : ROTATING_MSGS[rotatingMsg]}
             </p>
           </div>
 
@@ -1353,6 +1659,24 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
             <button onClick={onExit} style={{ marginTop: '20px', background: 'var(--surface-1)', border: '1px solid var(--border-1)', color: 'var(--text-2)', borderRadius: '999px', padding: '10px 20px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
               ← Go back
             </button>
+          )}
+
+          {status === 'slow_down' && slowDownSeconds === 0 && (
+            <div style={{ marginTop: '20px' }}>
+              <button onClick={findNext} style={{
+                background: 'var(--accent)',
+                color: 'var(--accent-text)',
+                padding: '12px 24px',
+                borderRadius: '999px',
+                border: 'none',
+                fontSize: '15px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                boxShadow: 'var(--accent-glow)',
+              }}>
+                Try Again
+              </button>
+            </div>
           )}
 
           {status === 'partner_left' && (
@@ -1764,10 +2088,12 @@ export default function ChatRoom({ mood, intent, safeMode, chatMode = 'video', t
         }
       `}</style>
     </div>
+    </>
   )
 }
 
 function Center({ children }) {
+
   return (
     <div style={{
       height: '100dvh',
