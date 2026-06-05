@@ -1,237 +1,203 @@
-import { useEffect, useState } from 'react'
+// client/src/pages/Home.jsx
+// Direct-CTA entry surface. No intermediate mood step for the primary
+// "Start Text Chat" / "Start Video Chat" buttons — App.jsx owns the
+// routing state and pushes users straight into /chat via goToChat().
+// The /mood route is preserved as a secondary path for users who want
+// mood-specific matching.
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import ThemeToggle from '../components/ThemeToggle'
-import useCanonical from '../hooks/useCanonical'
 
 const SERVER =
-  window.location.hostname === 'localhost'
-    ? 'http://localhost:3001'
-    : 'https://rcapp-server.onrender.com'
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SERVER_URL) ||
+  (typeof window !== 'undefined' && window.location.origin.replace(/:\d+$/, ':5055')) ||
+  'http://localhost:5055'
 
-export default function Home({ onStartText, onStartVideo, onTerms, theme, onToggleTheme }) {
-  useCanonical('https://www.miloo.chat/')
+export default function Home({
+  onStartText,
+  onStartVideo,
+  onTerms,
+  theme = 'dark',
+  onToggleTheme,
+}) {
   const navigate = useNavigate()
   const [liveStats, setLiveStats] = useState(null)
 
   useEffect(() => {
-    // REQ-SEC-06: hit enriched /api/health for onlineUsers count
-    const url = `${SERVER}/api/health`
-    const load = () => fetch(url).then(r => r.json()).then(setLiveStats).catch(() => {})
-    load()
-    const t = setInterval(load, 10000)
-    return () => clearInterval(t)
+    let cancelled = false
+    const fetchStats = () => {
+      fetch(`${SERVER}/api/health`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (cancelled) return
+          if (data) setLiveStats(data)
+        })
+        .catch(() => {
+          if (!cancelled) setLiveStats({ onlineUsers: 0, waitingUsers: 0, activePairs: 0 })
+        })
+    }
+    fetchStats()
+    const timer = setInterval(fetchStats, 10000) // REQ-UX-01
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
   }, [])
 
+  const statsLabel =
+    liveStats && liveStats.onlineUsers > 0
+      ? `${liveStats.onlineUsers} people online now`
+      : 'Be the first to start a conversation ✨'
+
   return (
-    <div className="page-scroll page-enter" style={{ background: 'var(--bg-0)', minHeight: '100vh' }}>
-
-      {/* ── Navbar ── */}
-      <nav style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '16px 24px',
-        borderBottom: '1px solid var(--border-1)',
-        position: 'sticky', top: 0, zIndex: 20,
-        background: 'var(--bg-0)',
-      }}>
-        <span style={{ fontSize: '20px', fontWeight: '900', letterSpacing: '-0.06em', color: 'var(--text-1)' }}>
-          miloo
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* REQ-UX-01 / REQ-FB-01: always-visible online counter; "Be the first..." when empty */}
-          {liveStats && (
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '8px',
-              padding: '6px 14px', borderRadius: '999px',
-              background: 'var(--accent-dim)', border: '1px solid var(--accent-border)',
-              color: 'var(--accent)', fontSize: '13px', fontWeight: '700',
-            }}>
-              <span className="blink" style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
-              {(liveStats.onlineUsers ?? ((liveStats.active_pairs || 0) * 2 + (liveStats.waiting_users || 0))) > 0
-                ? `🟢 ${(liveStats.onlineUsers ?? ((liveStats.active_pairs || 0) * 2 + (liveStats.waiting_users || 0)))} people online now`
-                : 'Be the first to start a conversation ✨'}
-            </div>
-          )}
-
-          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-        </div>
-      </nav>
-
-      {/* ── Hero ── */}
-      <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        textAlign: 'center', padding: '64px 24px 48px',
-        maxWidth: '580px', margin: '0 auto',
-      }}>
-
-        <h1 style={{
-          fontSize: 'clamp(52px, 12vw, 100px)',
-          fontWeight: '900', letterSpacing: '-0.07em', lineHeight: 0.88,
-          color: 'var(--text-1)', marginBottom: '16px',
-        }}>
-          Miloo — Free Random Chat
-        </h1>
-
-        <h2 style={{
-          fontSize: 'clamp(16px, 3vw, 22px)',
-          fontWeight: '700', color: 'var(--accent)',
-          letterSpacing: '-0.02em', lineHeight: 1.2,
-          marginBottom: '20px',
-        }}>
-          Free Random Chat &amp; Omegle Alternative
-        </h2>
-
-        <p style={{
-          fontSize: 'clamp(20px, 3.5vw, 28px)',
-          fontWeight: '600', color: 'var(--text-1)',
-          lineHeight: 1.3, letterSpacing: '-0.02em',
-          marginBottom: '14px', maxWidth: '420px',
-        }}>
-          Meet someone new.<br />Have a real conversation.
-        </p>
-
-        <p style={{
-          color: 'var(--text-3)', fontSize: '15px', lineHeight: 1.8,
-          marginBottom: '40px', maxWidth: '360px',
-        }}>
-          No signup. No profile. No algorithm.<br />
-          Pick a mood and start talking.
-        </p>
-
-        {/* CTAs */}
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: '12px',
-          width: '100%', maxWidth: '300px', marginBottom: '40px',
-        }}>
-          <button onClick={onStartText} style={{
-            padding: '16px 32px', fontSize: '16px', fontWeight: '700',
-            background: 'var(--surface-2)', color: 'var(--text-1)',
-            borderRadius: '999px', border: '1px solid var(--border-1)', cursor: 'pointer',
-            transition: 'all 0.2s ease',
-          }}>
-            Start Text Chat
+    <div
+      style={{
+        minHeight: '100vh',
+        padding: '40px 20px',
+        textAlign: 'center',
+        fontFamily: 'sans-serif',
+        background: 'var(--bg-0, #0b0b14)',
+        color: 'var(--text-1, #f3f4f6)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          maxWidth: '640px',
+          margin: '0 auto 24px',
+        }}
+      >
+        <h2 style={{ margin: 0 }}>Miloo Chat</h2>
+        {onToggleTheme ? (
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            aria-label="Toggle theme"
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border-1, #2a2a3a)',
+              color: 'var(--text-1, #f3f4f6)',
+              borderRadius: '8px',
+              padding: '6px 10px',
+              cursor: 'pointer',
+              fontSize: '13px',
+            }}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
           </button>
-          <button onClick={onStartVideo} style={{
-            padding: '16px 32px', fontSize: '16px', fontWeight: '700',
-            background: 'var(--accent)', color: 'var(--accent-text)',
-            borderRadius: '999px', border: 'none', cursor: 'pointer',
-            boxShadow: 'var(--accent-glow)',
-            transition: 'all 0.2s ease',
-          }}>
-            📹 Start Video Chat
-          </button>
-          <a href="/terms" style={{
-            color: 'inherit', textDecoration: 'none',
-            padding: '13px 24px', fontSize: '14px', fontWeight: '500',
-            background: 'transparent',
-            borderRadius: '999px', border: '1px solid var(--border-1)', cursor: 'pointer',
-            display: 'inline-block',
-          }}>
-            Safety &amp; Terms
-          </a>
-        </div>
-
-        {/* Trust pills */}
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', gap: '8px',
-          justifyContent: 'center', marginBottom: '24px',
-        }}>
-          {['No signup', '18+ only', 'Anonymous', 'Text or Video', 'Always free'].map(item => (
-            <span key={item} style={{
-              background: 'var(--surface-1)', border: '1px solid var(--border-1)',
-              color: 'var(--text-3)', borderRadius: '999px',
-              padding: '7px 14px', fontSize: '13px', fontWeight: '500',
-            }}>{item}</span>
-          ))}
-        </div>
-
-        {/* Social proof */}
-        <div style={{ marginBottom: '40px', textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-3)', fontSize: '13px', fontWeight: '600', letterSpacing: '0.02em' }}>
-            10,000+ conversations started &nbsp;•&nbsp; No signup &nbsp;•&nbsp; No bots &nbsp;•&nbsp; 100% anonymous
-          </p>
-        </div>
-
-        {/* How it works — responsive grid */}
-        <div style={{
-          width: '100%',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          gap: '12px',
-          marginBottom: '56px',
-        }}>
-          {[
-            { emoji: '🎭', label: 'Pick a mood', desc: 'Choose the kind of conversation you want' },
-            { emoji: '⚡', label: 'Get matched',  desc: 'We find someone on the same wavelength' },
-            { emoji: '💬', label: 'Start talking', desc: 'Text or video — your choice' },
-          ].map(step => (
-            <div key={step.label} className="card-hover" style={{
-              padding: '20px 14px', borderRadius: '18px',
-              background: 'var(--bg-2)', border: '1px solid var(--border-1)',
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: '28px', marginBottom: '10px' }}>{step.emoji}</div>
-              <div style={{ color: 'var(--text-1)', fontSize: '13px', fontWeight: '700', marginBottom: '5px' }}>{step.label}</div>
-              <div style={{ color: 'var(--text-3)', fontSize: '12px', lineHeight: 1.55 }}>{step.desc}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* FAQ — SEO */}
-        <div style={{ width: '100%', textAlign: 'left', marginBottom: '48px' }}>
-          <p style={{ color: 'var(--text-3)', fontSize: '11px', fontWeight: '700', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '16px', textAlign: 'center' }}>
-            Frequently Asked Questions
-          </p>
-          {[
-            { q: 'Is Miloo free?', a: 'Yes, Miloo is completely free. No subscription, no hidden fees, no signup required.' },
-            { q: 'Is Miloo safe?', a: 'Miloo is built with safety in mind — no accounts, no stored video, and a reporting system to remove bad actors. Always use caution with strangers online.' },
-            { q: 'What happened to Omegle?', a: 'Omegle shut down in 2023. Miloo is a modern alternative focused on real conversations, mood-based matching, and a safer experience.' },
-            { q: 'How is Miloo different from other random chat apps?', a: 'Miloo matches you by mood — deep talk, music, gaming, venting, and more. No bots, no signup, and an AI companion (Milo) keeps you company while you wait for a real match.' },
-          ].map(({ q, a }) => (
-            <details key={q} style={{ marginBottom: '10px', borderRadius: '14px', background: 'var(--bg-2)', border: '1px solid var(--border-1)', padding: '14px 18px' }}>
-              <summary style={{ color: 'var(--text-1)', fontSize: '14px', fontWeight: '700', cursor: 'pointer', listStyle: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                {q} <span style={{ color: 'var(--text-3)', fontSize: '18px', fontWeight: '400' }}>+</span>
-              </summary>
-              <p style={{ color: 'var(--text-3)', fontSize: '13px', lineHeight: 1.7, marginTop: '10px' }}>{a}</p>
-            </details>
-          ))}
-        </div>
-
+        ) : null}
       </div>
 
-      {/* ── Footer ── */}
-      <footer style={{
-        borderTop: '1px solid var(--border-1)',
-        padding: '24px',
-        textAlign: 'center',
-        display: 'flex',
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-        gap: '8px 20px',
-      }}>
-        <a
-          href="/terms"
+      {/* REQ-UX-01 / REQ-FB-01 Stats Pill */}
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 16px',
+          borderRadius: '999px',
+          background: 'var(--bg-1, #e0e7ff)',
+          border: '1px solid var(--border-1, #c7d2fe)',
+          color: 'var(--text-2, #4f46e5)',
+          fontSize: '14px',
+          fontWeight: 700,
+          marginBottom: '32px',
+        }}
+      >
+        <span
           style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--text-3)', fontSize: '13px', fontWeight: '500', padding: 0,
-            textDecoration: 'none',
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            background: 'var(--text-2, #4f46e5)',
+            display: 'inline-block',
           }}
-        >
-          Safety &amp; Terms
-        </a>
-        <a
-          href="/blog/omegle-alternative"
-          style={{
-            color: 'var(--text-3)', fontSize: '13px', fontWeight: '500',
-            textDecoration: 'none',
-          }}
-        >
-          Best Omegle Alternatives in India 2026
-        </a>
-        <span style={{ color: 'var(--text-3)', fontSize: '13px' }}>
-          © {new Date().getFullYear()} Miloo
-        </span>
-      </footer>
+        />
+        {statsLabel}
+      </div>
 
+      {/* Primary Funnel Layout — direct CTAs */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          width: '100%',
+          maxWidth: '300px',
+          margin: '0 auto',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onStartText}
+          aria-label="Start text chat"
+          style={{
+            padding: '16px 32px',
+            fontSize: '16px',
+            fontWeight: 700,
+            background: 'var(--accent, #4f46e5)',
+            color: '#fff',
+            borderRadius: '12px',
+            border: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          Start Text Chat →
+        </button>
+        <button
+          type="button"
+          onClick={onStartVideo}
+          aria-label="Start video chat"
+          style={{
+            padding: '14px 24px',
+            fontSize: '14px',
+            fontWeight: 600,
+            background: 'transparent',
+            color: 'var(--text-1, #1f2937)',
+            borderRadius: '12px',
+            border: '1px solid var(--border-1, #d1d5db)',
+            cursor: 'pointer',
+          }}
+        >
+          📹 Start Video Chat
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate('/mood')}
+          style={{
+            marginTop: '8px',
+            padding: '10px 16px',
+            fontSize: '13px',
+            background: 'transparent',
+            color: 'var(--text-3, #6b7280)',
+            border: 'none',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+          }}
+        >
+          Or pick a mood first
+        </button>
+      </div>
+
+      {onTerms ? (
+        <button
+          type="button"
+          onClick={onTerms}
+          style={{
+            marginTop: '32px',
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-3, #6b7280)',
+            cursor: 'pointer',
+            fontSize: '12px',
+            textDecoration: 'underline',
+          }}
+        >
+          Terms
+        </button>
+      ) : null}
     </div>
   )
 }
