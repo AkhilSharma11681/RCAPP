@@ -1,203 +1,362 @@
 // client/src/pages/Home.jsx
-// Direct-CTA entry surface. No intermediate mood step for the primary
-// "Start Text Chat" / "Start Video Chat" buttons — App.jsx owns the
-// routing state and pushes users straight into /chat via goToChat().
-// The /mood route is preserved as a secondary path for users who want
-// mood-specific matching.
-import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+//
+// Hero landing page. Attractive, simple, and fully responsive.
+// Layout: hero → mode selector → features → footer.
 
-const SERVER =
-  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SERVER_URL) ||
-  (typeof window !== 'undefined' && window.location.origin.replace(/:\d+$/, ':5055')) ||
-  'http://localhost:5055'
+import { useNavigate } from 'react-router-dom'
+import Navbar from '../components/Navbar'
+import Logo from '../components/Logo'
 
 export default function Home({
   onStartText,
   onStartVideo,
   onTerms,
-  theme = 'dark',
+  theme,
   onToggleTheme,
 }) {
   const navigate = useNavigate()
-  const [liveStats, setLiveStats] = useState(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const fetchStats = () => {
-      fetch(`${SERVER}/api/health`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (cancelled) return
-          if (data) setLiveStats(data)
-        })
-        .catch(() => {
-          if (!cancelled) setLiveStats({ onlineUsers: 0, waitingUsers: 0, activePairs: 0 })
-        })
-    }
-    fetchStats()
-    const timer = setInterval(fetchStats, 10000) // REQ-UX-01
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [])
-
-  const statsLabel =
-    liveStats && liveStats.onlineUsers > 0
-      ? `${liveStats.onlineUsers} people online now`
-      : 'Be the first to start a conversation ✨'
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        padding: '40px 20px',
-        textAlign: 'center',
-        fontFamily: 'sans-serif',
-        background: 'var(--bg-0, #0b0b14)',
-        color: 'var(--text-1, #f3f4f6)',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          maxWidth: '640px',
-          margin: '0 auto 24px',
-        }}
-      >
-        <h2 style={{ margin: 0 }}>Miloo Chat</h2>
-        {onToggleTheme ? (
+    <div className="page page-enter" style={{ background: 'var(--bg-0)' }}>
+      <Navbar
+        theme={theme}
+        onToggleTheme={onToggleTheme}
+        rightSlot={
           <button
-            type="button"
-            onClick={onToggleTheme}
-            aria-label="Toggle theme"
+            onClick={onTerms}
+            className="compact"
             style={{
               background: 'transparent',
-              border: '1px solid var(--border-1, #2a2a3a)',
-              color: 'var(--text-1, #f3f4f6)',
-              borderRadius: '8px',
-              padding: '6px 10px',
-              cursor: 'pointer',
-              fontSize: '13px',
+              color: 'var(--text-2)',
+              fontSize: '14px',
+              fontWeight: 600,
+              padding: '8px 12px',
+              borderRadius: 'var(--radius-pill)',
             }}
           >
-            {theme === 'dark' ? '☀️' : '🌙'}
+            Safety
           </button>
-        ) : null}
-      </div>
+        }
+      />
 
-      {/* REQ-UX-01 / REQ-FB-01 Stats Pill */}
-      <div
+      {/* ── HERO ── */}
+      <section
+        className="container"
         style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '8px 16px',
-          borderRadius: '999px',
-          background: 'var(--bg-1, #e0e7ff)',
-          border: '1px solid var(--border-1, #c7d2fe)',
-          color: 'var(--text-2, #4f46e5)',
-          fontSize: '14px',
-          fontWeight: 700,
-          marginBottom: '32px',
-        }}
-      >
-        <span
-          style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            background: 'var(--text-2, #4f46e5)',
-            display: 'inline-block',
-          }}
-        />
-        {statsLabel}
-      </div>
-
-      {/* Primary Funnel Layout — direct CTAs */}
-      <div
-        style={{
+          flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          gap: '12px',
-          width: '100%',
-          maxWidth: '300px',
-          margin: '0 auto',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textAlign: 'center',
+          paddingTop: 'clamp(40px, 8vh, 80px)',
+          paddingBottom: 'clamp(40px, 6vh, 60px)',
+          position: 'relative',
         }}
       >
-        <button
-          type="button"
-          onClick={onStartText}
-          aria-label="Start text chat"
+        {/* Decorative gradient orbs */}
+        <div
+          aria-hidden="true"
           style={{
-            padding: '16px 32px',
-            fontSize: '16px',
-            fontWeight: 700,
-            background: 'var(--accent, #4f46e5)',
-            color: '#fff',
-            borderRadius: '12px',
-            border: 'none',
-            cursor: 'pointer',
+            position: 'absolute',
+            top: '10%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 'clamp(280px, 60vw, 600px)',
+            height: 'clamp(280px, 60vw, 600px)',
+            background:
+              'radial-gradient(circle, rgba(167,139,250,0.25) 0%, rgba(124,58,237,0.08) 40%, transparent 70%)',
+            filter: 'blur(40px)',
+            pointerEvents: 'none',
+            zIndex: 0,
           }}
-        >
-          Start Text Chat →
-        </button>
-        <button
-          type="button"
-          onClick={onStartVideo}
-          aria-label="Start video chat"
-          style={{
-            padding: '14px 24px',
-            fontSize: '14px',
-            fontWeight: 600,
-            background: 'transparent',
-            color: 'var(--text-1, #1f2937)',
-            borderRadius: '12px',
-            border: '1px solid var(--border-1, #d1d5db)',
-            cursor: 'pointer',
-          }}
-        >
-          📹 Start Video Chat
-        </button>
+        />
 
-        <button
-          type="button"
-          onClick={() => navigate('/mood')}
-          style={{
-            marginTop: '8px',
-            padding: '10px 16px',
-            fontSize: '13px',
-            background: 'transparent',
-            color: 'var(--text-3, #6b7280)',
-            border: 'none',
-            cursor: 'pointer',
-            textDecoration: 'underline',
-          }}
-        >
-          Or pick a mood first
-        </button>
-      </div>
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: 720 }}>
+          {/* Badge */}
+          <div
+            className="fade-in-up"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 14px',
+              borderRadius: 'var(--radius-pill)',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border-1)',
+              fontSize: '13px',
+              fontWeight: 600,
+              color: 'var(--text-2)',
+              marginBottom: 24,
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: 'var(--success)',
+                boxShadow: '0 0 8px var(--success)',
+                animation: 'pulse 2s ease-in-out infinite',
+              }}
+            />
+            Free · Anonymous · No signup
+          </div>
 
-      {onTerms ? (
-        <button
-          type="button"
-          onClick={onTerms}
+          <h1
+            className="fade-in-up"
+            style={{
+              fontSize: 'clamp(36px, 7vw, 64px)',
+              fontWeight: 800,
+              letterSpacing: '-0.04em',
+              lineHeight: 1.05,
+              margin: '0 0 20px',
+              color: 'var(--text-1)',
+            }}
+          >
+            Meet someone new.{' '}
+            <span className="gradient-text">Instantly.</span>
+          </h1>
+
+          <p
+            className="fade-in-up"
+            style={{
+              fontSize: 'clamp(15px, 1.8vw, 18px)',
+              color: 'var(--text-2)',
+              lineHeight: 1.6,
+              maxWidth: 540,
+              margin: '0 auto 36px',
+            }}
+          >
+            Miloo matches you with real people who share your vibe. Pick a mood,
+            start a conversation, and let serendipity do the rest.
+          </p>
+
+          {/* ── Mode selector ── */}
+          <div
+            className="fade-in-up"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
+              gap: 12,
+              maxWidth: 480,
+              margin: '0 auto 24px',
+            }}
+          >
+            <ModeCard
+              icon="💬"
+              title="Text Chat"
+              desc="Type, no camera, instant"
+              onClick={onStartText}
+            />
+            <ModeCard
+              icon="🎥"
+              title="Video Chat"
+              desc="Face to face, real time"
+              onClick={onStartVideo}
+            />
+          </div>
+
+          <button
+            onClick={() => navigate('/mood')}
+            className="fade-in-up"
+            style={{
+              background: 'transparent',
+              color: 'var(--text-2)',
+              fontSize: '14px',
+              fontWeight: 600,
+              padding: '10px 18px',
+              borderRadius: 'var(--radius-pill)',
+              border: '1px solid var(--border-1)',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            Or pick a mood first <span aria-hidden>→</span>
+          </button>
+        </div>
+      </section>
+
+      {/* ── FEATURES ── */}
+      <section
+        className="container"
+        style={{
+          paddingTop: 'clamp(40px, 6vh, 60px)',
+          paddingBottom: 'clamp(40px, 6vh, 60px)',
+        }}
+      >
+        <div
           style={{
-            marginTop: '32px',
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-3, #6b7280)',
-            cursor: 'pointer',
-            fontSize: '12px',
-            textDecoration: 'underline',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))',
+            gap: 16,
+            maxWidth: 980,
+            margin: '0 auto',
           }}
         >
-          Terms
-        </button>
-      ) : null}
+          <FeatureCard
+            icon="🎯"
+            title="Mood matching"
+            desc="Find someone who actually gets it"
+          />
+          <FeatureCard
+            icon="🛡️"
+            title="Safe by default"
+            desc="18+ only, fingerprint bans, no logs"
+          />
+          <FeatureCard
+            icon="🤖"
+            title="Milo keeps you company"
+            desc="AI companion while you wait"
+          />
+          <FeatureCard
+            icon="⚡"
+            title="Instant, no signup"
+            desc="Open the page and you're in"
+          />
+        </div>
+      </section>
+
+      {/* ── FOOTER ── */}
+      <footer
+        className="container"
+        style={{
+          paddingTop: 24,
+          paddingBottom: 32,
+          display: 'flex',
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          color: 'var(--text-3)',
+          fontSize: 13,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Logo size={20} />
+          <span>© {new Date().getFullYear()} Miloo</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+          <FooterLink onClick={onTerms}>Safety</FooterLink>
+          <FooterLink onClick={() => navigate('/blog/omegle-alternative')}>
+            Blog
+          </FooterLink>
+        </div>
+      </footer>
     </div>
+  )
+}
+
+/* ── Subcomponents ── */
+
+function ModeCard({ icon, title, desc, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="card-hover"
+      style={{
+        position: 'relative',
+        textAlign: 'left',
+        padding: 'clamp(18px, 3vw, 24px)',
+        borderRadius: 'var(--radius-lg)',
+        background: 'var(--surface-1)',
+        border: '1px solid var(--border-1)',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        transition: 'all 0.2s ease',
+        minHeight: 110,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = 'var(--accent-border)'
+        e.currentTarget.style.background = 'var(--surface-2)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = 'var(--border-1)'
+        e.currentTarget.style.background = 'var(--surface-1)'
+      }}
+    >
+      <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden="true">
+        {icon}
+      </span>
+      <div>
+        <div
+          style={{
+            fontSize: 16,
+            fontWeight: 700,
+            color: 'var(--text-1)',
+            marginBottom: 2,
+            letterSpacing: '-0.01em',
+          }}
+        >
+          {title}
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.4 }}>
+          {desc}
+        </div>
+      </div>
+    </button>
+  )
+}
+
+function FeatureCard({ icon, title, desc }) {
+  return (
+    <div
+      className="card-hover"
+      style={{
+        padding: 'clamp(16px, 2.5vw, 22px)',
+        borderRadius: 'var(--radius-md)',
+        background: 'var(--surface-1)',
+        border: '1px solid var(--border-1)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 22,
+          width: 40,
+          height: 40,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 'var(--radius-sm)',
+          background: 'var(--accent-dim)',
+        }}
+        aria-hidden="true"
+      >
+        {icon}
+      </span>
+      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>{title}</div>
+      <div style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.5 }}>{desc}</div>
+    </div>
+  )
+}
+
+function FooterLink({ onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      className="compact"
+      style={{
+        background: 'transparent',
+        color: 'var(--text-3)',
+        fontSize: 13,
+        fontWeight: 500,
+        padding: 4,
+        cursor: 'pointer',
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-1)')}
+      onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-3)')}
+    >
+      {children}
+    </button>
   )
 }

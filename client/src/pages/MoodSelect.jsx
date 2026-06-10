@@ -1,5 +1,10 @@
+// client/src/pages/MoodSelect.jsx
+//
+// Mobile-first mood + mode selector. Two columns on desktop,
+// single column with sticky CTA on mobile.
+
 import { useState } from 'react'
-import ThemeToggle from '../components/ThemeToggle'
+import Navbar from '../components/Navbar'
 import useCanonical from '../hooks/useCanonical'
 import { trackEvent } from '../utils/analytics'
 
@@ -18,7 +23,7 @@ const CHAT_MODES = [
   { id: 'video', icon: '🎥', label: 'Video Chat', sub: 'Face to face.' },
 ]
 
-export default function MoodSelect({ onContinue, onBack, theme, onToggleTheme }) {
+export default function MoodSelect({ onContinue, theme, onToggleTheme }) {
   useCanonical('https://www.miloo.chat/mood')
   const [selectedMood, setSelectedMood] = useState('any')
   const [chatMode, setChatMode] = useState('text')
@@ -30,248 +35,253 @@ export default function MoodSelect({ onContinue, onBack, theme, onToggleTheme })
   }
 
   return (
-    <>
-      <style>{`
-        /* Mobile: full-height locked layout, button always visible */
-        @media (max-width: 768px) {
-          .mood-wrap {
-            height: 100dvh !important;
-            overflow: hidden !important;
-            padding: 0 !important;
-            min-height: unset !important;
-            display: flex !important;
-            flex-direction: column !important;
-            gap: 0 !important;
-          }
-          .mood-nav {
-            padding: 10px 16px !important;
-            flex-shrink: 0;
-          }
-          .mood-header {
-            padding: 8px 16px 4px !important;
-            flex-shrink: 0;
-          }
-          .mood-header h2 {
-            font-size: 18px !important;
-            margin-bottom: 2px !important;
-          }
-          .mood-header p {
-            font-size: 12px !important;
-          }
-          .mood-mode-section {
-            flex-shrink: 0;
-            padding: 6px 16px 0 !important;
-            gap: 0 !important;
-          }
-          .mood-mode-label {
-            display: none !important;
-          }
-          .mood-mode-grid {
-            display: flex !important;
-            gap: 8px !important;
-          }
-          .mood-mode-btn {
-            flex: 1;
-            padding: 9px 8px !important;
-            border-radius: 12px !important;
-            min-height: 44px !important;
-            min-width: unset !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            gap: 6px !important;
-          }
-          .mood-mode-icon { font-size: 16px !important; }
-          .mood-mode-title { font-size: 13px !important; }
-          .mood-mode-sub { font-size: 11px !important; }
-          .mood-grid-section {
-            flex: 1 !important;
-            overflow-y: auto !important;
-            -webkit-overflow-scrolling: touch !important;
-            padding: 6px 16px !important;
-            gap: 0 !important;
-          }
-          .mood-grid-label { display: none !important; }
-          .mood-grid {
-            grid-template-columns: repeat(2, 1fr) !important;
-            gap: 8px !important;
-          }
-          .mood-card {
-            padding: 10px 10px !important;
-            min-height: 68px !important;
-            border-radius: 12px !important;
-            min-width: unset !important;
-          }
-          .mood-card-emoji { font-size: 20px !important; margin-bottom: 4px !important; }
-          .mood-card-label { font-size: 12px !important; }
-          .mood-card-desc { font-size: 10px !important; }
-          .mood-cta-wrap {
-            flex-shrink: 0 !important;
-            padding: 8px 16px 16px !important;
-          }
-          .mood-cta-btn {
-            min-height: 52px !important;
-            font-size: 15px !important;
-            padding: 14px !important;
-          }
-        }
+    <div className="page page-enter" style={{ background: 'var(--bg-0)' }}>
+      <Navbar theme={theme} onToggleTheme={onToggleTheme} />
 
-        /* Desktop: original scrollable layout */
-        @media (min-width: 769px) {
-          .mood-wrap {
-            min-height: 100vh;
-            overflow: visible;
-          }
-          .mood-mode-btn {
-            padding: 18px 14px;
-            border-radius: 16px;
-            text-align: left;
-            display: block;
-          }
-          .mood-mode-icon { font-size: 26px; display: block; margin-bottom: 8px; }
-          .mood-mode-title { font-size: 14px; }
-          .mood-mode-sub { font-size: 12px; }
-          .mood-grid {
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            gap: 10px;
-          }
-          .mood-card { padding: 18px 14px; border-radius: 16px; }
-          .mood-card-emoji { font-size: 26px; margin-bottom: 8px; }
-          .mood-card-label { font-size: 13px; }
-          .mood-card-desc { font-size: 11px; }
-          .mood-cta-btn { padding: 18px; font-size: 16px; }
-        }
-      `}</style>
-
-      <div
-        className="page-enter mood-wrap"
-        style={{ background: 'var(--bg-0)' }}
+      <main
+        className="container"
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          maxWidth: 560,
+          width: '100%',
+          paddingTop: 'clamp(24px, 4vh, 40px)',
+          paddingBottom: 'clamp(24px, 4vh, 40px)',
+        }}
       >
-        {/* ── Navbar ── */}
-        <nav className="mood-nav" style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '16px 24px', borderBottom: '1px solid var(--border-1)',
-          position: 'sticky', top: 0, zIndex: 20, background: 'var(--bg-0)',
-        }}>
-          <button onClick={onBack} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--text-3)', fontSize: '14px', fontWeight: '600',
-            display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 0',
-            minHeight: 'unset', minWidth: 'unset',
-          }}>← Back</button>
-          <span style={{ fontSize: '18px', fontWeight: '900', letterSpacing: '-0.06em', color: 'var(--text-1)' }}>
-            miloo
-          </span>
-          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-        </nav>
+        {/* Header */}
+        <header style={{ textAlign: 'center', marginBottom: 'clamp(20px, 3vh, 28px)' }}>
+          <h1
+            style={{
+              fontSize: 'clamp(24px, 4.5vw, 36px)',
+              fontWeight: 800,
+              letterSpacing: '-0.03em',
+              lineHeight: 1.1,
+              color: 'var(--text-1)',
+              marginBottom: 8,
+            }}
+          >
+            What's your <span className="gradient-text">vibe</span>?
+          </h1>
+          <p
+            style={{
+              color: 'var(--text-3)',
+              fontSize: 'clamp(13px, 1.5vw, 15px)',
+              lineHeight: 1.5,
+              maxWidth: 380,
+              margin: '0 auto',
+            }}
+          >
+            Pick a mood — we'll find someone on the same wavelength.
+          </p>
+        </header>
 
-        {/* ── Inner content wrapper (desktop: centered column) ── */}
-        <div style={{ maxWidth: '520px', margin: '0 auto', display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-
-          {/* Header */}
-          <div className="mood-header" style={{ textAlign: 'center', padding: '32px 20px 0' }}>
-            <h2 style={{
-              color: 'var(--text-1)', fontSize: 'clamp(22px, 5vw, 36px)',
-              fontWeight: '800', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '8px',
-            }}>
-              What's your vibe?
-            </h2>
-            <p style={{ color: 'var(--text-3)', fontSize: '14px', lineHeight: 1.5 }}>
-              Pick a mood — we'll find someone on the same wavelength.
-            </p>
+        {/* ── Chat mode selector ── */}
+        <section style={{ marginBottom: 'clamp(20px, 3vh, 28px)' }}>
+          <SectionLabel>How do you want to chat?</SectionLabel>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 10,
+            }}
+          >
+            {CHAT_MODES.map((m) => (
+              <ModeButton
+                key={m.id}
+                mode={m}
+                active={chatMode === m.id}
+                onClick={() => setChatMode(m.id)}
+              />
+            ))}
           </div>
+        </section>
 
-          {/* ── Chat mode selector ── */}
-          <div className="mood-mode-section" style={{ padding: '24px 20px 0' }}>
-            <p className="mood-mode-label" style={{
-              color: 'var(--text-3)', fontSize: '11px', fontWeight: '700',
-              letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px',
-            }}>
-              How do you want to chat?
-            </p>
-            <div className="mood-mode-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              {CHAT_MODES.map(m => (
-                <button
-                  key={m.id}
-                  className="mood-mode-btn"
-                  onClick={() => setChatMode(m.id)}
-                  style={{
-                    border: 'none', cursor: 'pointer',
-                    background: chatMode === m.id ? 'var(--accent)' : 'var(--bg-2)',
-                    outline: chatMode === m.id ? 'none' : '1px solid var(--border-1)',
-                    boxShadow: chatMode === m.id ? 'var(--accent-glow)' : 'none',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <span className="mood-mode-icon">{m.icon}</span>
-                  <div>
-                    <div className="mood-mode-title" style={{
-                      color: chatMode === m.id ? 'var(--accent-text)' : 'var(--text-1)',
-                      fontWeight: '700', lineHeight: 1.2,
-                    }}>{m.label}</div>
-                    <div className="mood-mode-sub" style={{
-                      color: chatMode === m.id ? 'rgba(255,255,255,0.6)' : 'var(--text-3)',
-                      lineHeight: 1.3,
-                    }}>{m.sub}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
+        {/* ── Mood grid ── */}
+        <section style={{ flex: 1, marginBottom: 'clamp(20px, 3vh, 24px)' }}>
+          <SectionLabel>Pick your mood</SectionLabel>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 140px), 1fr))',
+              gap: 10,
+            }}
+          >
+            {moods.map((mood) => (
+              <MoodCard
+                key={mood.id}
+                mood={mood}
+                active={selectedMood === mood.id}
+                onClick={() => setSelectedMood(mood.id)}
+              />
+            ))}
           </div>
+        </section>
 
-          {/* ── Mood grid ── */}
-          <div className="mood-grid-section" style={{ padding: '24px 20px 0', flex: 1 }}>
-            <p className="mood-grid-label" style={{
-              color: 'var(--text-3)', fontSize: '11px', fontWeight: '700',
-              letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '10px',
-            }}>
-              Pick your mood
-            </p>
-            <div className="mood-grid" style={{ display: 'grid' }}>
-              {moods.map(mood => (
-                <button
-                  key={mood.id}
-                  className="mood-card"
-                  onClick={() => setSelectedMood(mood.id)}
-                  style={{
-                    border: 'none', cursor: 'pointer', textAlign: 'left',
-                    background: selectedMood === mood.id ? 'var(--accent-dim)' : 'var(--bg-2)',
-                    outline: selectedMood === mood.id
-                      ? '2px solid var(--accent-border)'
-                      : '1px solid var(--border-1)',
-                    transition: 'all 0.13s ease',
-                    minWidth: 'unset',
-                  }}
-                >
-                  <div className="mood-card-emoji">{mood.emoji}</div>
-                  <div className="mood-card-label" style={{
-                    color: selectedMood === mood.id ? 'var(--accent)' : 'var(--text-1)',
-                    fontWeight: '700', marginBottom: '2px',
-                  }}>{mood.label}</div>
-                  <div className="mood-card-desc" style={{ color: 'var(--text-3)', lineHeight: 1.3 }}>{mood.desc}</div>
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* ── Sticky CTA ── */}
+        <div
+          style={{
+            position: 'sticky',
+            bottom: 0,
+            paddingTop: 12,
+            paddingBottom: 12,
+            background: 'linear-gradient(to top, var(--bg-0) 60%, transparent)',
+          }}
+        >
+          <button
+            onClick={handleContinue}
+            className="fade-in-up"
+            style={{
+              width: '100%',
+              padding: 'clamp(14px, 2vw, 18px) 22px',
+              fontSize: 'clamp(15px, 1.6vw, 16px)',
+              fontWeight: 700,
+              letterSpacing: '-0.01em',
+              color: 'var(--accent-text)',
+              background: 'var(--gradient-cta)',
+              border: 'none',
+              borderRadius: 'var(--radius-pill)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              boxShadow: 'var(--accent-glow)',
+              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-1px)'
+              e.currentTarget.style.boxShadow = 'var(--shadow-glow)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = 'var(--accent-glow)'
+            }}
+          >
+            {chatMode === 'text' ? 'Find Someone to Chat With' : 'Find My Match'}
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </main>
+    </div>
+  )
+}
 
-          {/* ── CTA — always visible ── */}
-          <div className="mood-cta-wrap" style={{ padding: '24px 20px 40px', flexShrink: 0 }}>
-            <button
-              className="mood-cta-btn"
-              onClick={handleContinue}
-              style={{
-                width: '100%', borderRadius: '999px', border: 'none',
-                cursor: 'pointer', background: 'var(--accent)', color: 'var(--accent-text)',
-                fontWeight: '700', boxShadow: 'var(--accent-glow)', letterSpacing: '-0.01em',
-                minWidth: 'unset',
-              }}
-            >
-              {chatMode === 'text' ? 'Find Someone to Chat With →' : 'Find My Match →'}
-            </button>
-          </div>
+/* ── Subcomponents ── */
 
+function SectionLabel({ children }) {
+  return (
+    <p
+      style={{
+        color: 'var(--text-3)',
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: '0.1em',
+        textTransform: 'uppercase',
+        marginBottom: 10,
+      }}
+    >
+      {children}
+    </p>
+  )
+}
+
+function ModeButton({ mode, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="card-hover"
+      style={{
+        textAlign: 'left',
+        padding: 'clamp(12px, 2vw, 16px)',
+        borderRadius: 'var(--radius-md)',
+        cursor: 'pointer',
+        background: active ? 'var(--accent-dim)' : 'var(--surface-1)',
+        border: active
+          ? '2px solid var(--accent)'
+          : '1px solid var(--border-1)',
+        boxShadow: active ? 'var(--accent-glow-soft)' : 'none',
+        transition: 'all 0.18s ease',
+        minHeight: 64,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+      }}
+    >
+      <span style={{ fontSize: 22, lineHeight: 1 }} aria-hidden="true">
+        {mode.icon}
+      </span>
+      <div>
+        <div
+          style={{
+            color: active ? 'var(--accent)' : 'var(--text-1)',
+            fontWeight: 700,
+            fontSize: 14,
+            lineHeight: 1.2,
+          }}
+        >
+          {mode.label}
+        </div>
+        <div
+          style={{
+            color: 'var(--text-3)',
+            fontSize: 12,
+            lineHeight: 1.3,
+            marginTop: 2,
+          }}
+        >
+          {mode.sub}
         </div>
       </div>
-    </>
+    </button>
+  )
+}
+
+function MoodCard({ mood, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="card-hover"
+      style={{
+        textAlign: 'left',
+        padding: 'clamp(14px, 2vw, 18px) 14px',
+        borderRadius: 'var(--radius-md)',
+        cursor: 'pointer',
+        background: active ? 'var(--accent-dim)' : 'var(--surface-1)',
+        border: active ? '2px solid var(--accent)' : '1px solid var(--border-1)',
+        transition: 'all 0.18s ease',
+        minHeight: 90,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+      }}
+    >
+      <span style={{ fontSize: 24, lineHeight: 1 }} aria-hidden="true">
+        {mood.emoji}
+      </span>
+      <div>
+        <div
+          style={{
+            color: active ? 'var(--accent)' : 'var(--text-1)',
+            fontWeight: 700,
+            fontSize: 14,
+            lineHeight: 1.2,
+          }}
+        >
+          {mood.label}
+        </div>
+        <div
+          style={{
+            color: 'var(--text-3)',
+            fontSize: 12,
+            lineHeight: 1.3,
+            marginTop: 2,
+          }}
+        >
+          {mood.desc}
+        </div>
+      </div>
+    </button>
   )
 }
