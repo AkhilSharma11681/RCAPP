@@ -270,6 +270,18 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Text Chat Message Relay between matched strangers
+  socket.on('send_message', (data) => {
+    const partnerId = activePairs.get(socket.id);
+    if (partnerId && data && data.text) {
+      io.to(partnerId).emit('receive_message', {
+        text: data.text,
+        from: socket.id,
+        timestamp: Date.now()
+      });
+    }
+  });
+
   // REQ-F6: Real-time Socket Handoff Bridge for Milo 2.0
   socket.on('milo_chat_message', async (data) => {
     const { fingerprint, text, persona, mood, history } = data;
