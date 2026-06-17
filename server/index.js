@@ -151,9 +151,6 @@ function findMatch(socketId) {
   const current = waitingQueue.find(u => u.id === socketId);
   if (!current) return null;
 
-  // REQ-SEC-02: Minimum Presence Check (2 seconds minimum wait state)
-  if (Date.now() - current.joinedAt < 2000) return null;
-
   const candidates = waitingQueue.filter(u => u.id !== socketId);
   if (candidates.length === 0) return null;
 
