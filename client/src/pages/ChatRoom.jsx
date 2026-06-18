@@ -440,6 +440,12 @@ export default function ChatRoom({
       teardownWebRTC()
     })
 
+    sock.on('receive_message', (data) => {
+      const text = data && typeof data.text === 'string' ? data.text : ''
+      if (!text) return
+      setMessages((prev) => [...prev, { from: 'stranger', text, time: nowTime() }])
+    })
+
     sock.on('slow_down', ({ remainSec }) => {
       setStatus('slow_down')
       if (handoffTimerRef.current) clearTimeout(handoffTimerRef.current)
@@ -616,6 +622,29 @@ export default function ChatRoom({
             />
             <span style={{ textTransform: 'capitalize' }}>{statusLabel(status, iceState, isVideo, mood)}</span>
           </div>
+
+          {(status === 'text_chat' || status === 'connected') && (
+            <button
+              onClick={findNext}
+              aria-label="Skip to next stranger"
+              className="compact"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                borderRadius: 'var(--radius-pill)',
+                background: 'var(--gradient-cta)',
+                border: 'none',
+                color: 'var(--accent-text)',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Skip ⏭
+            </button>
+          )}
 
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
         </header>
