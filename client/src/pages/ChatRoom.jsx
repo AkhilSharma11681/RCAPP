@@ -164,6 +164,7 @@ export default function ChatRoom({
   const waitingTimerRef = useRef(null)
   const handoffTimerRef = useRef(null)
   const autoNextTimerRef = useRef(null)
+  const hasJoinedRef = useRef(false)
   const miloScrollRef = useRef(null)
   const msgScrollRef = useRef(null)
 
@@ -385,6 +386,10 @@ export default function ChatRoom({
     socketRef.current = sock
 
     sock.on('connect', () => {
+      if (hasJoinedRef.current) {
+        return
+      }
+      hasJoinedRef.current = true
       sock.emit('find_match', {
         mood: moodRef.current,
         intent,
@@ -585,8 +590,9 @@ export default function ChatRoom({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 8,
-            padding: '12px clamp(12px, 3vw, 20px)',
+            flexWrap: 'wrap',
+            gap: 6,
+            padding: '10px clamp(10px, 3vw, 20px)',
             borderBottom: '1px solid var(--border-1)',
             background: 'var(--bg-0)',
             flexShrink: 0,
@@ -618,13 +624,18 @@ export default function ChatRoom({
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: '6px 12px',
+              padding: '6px 10px',
               borderRadius: 'var(--radius-pill)',
               background: 'var(--surface-1)',
               border: '1px solid var(--border-1)',
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: 600,
               color: 'var(--text-3)',
+              whiteSpace: 'nowrap',
+              flexShrink: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
           >
             <span
@@ -634,10 +645,11 @@ export default function ChatRoom({
                 borderRadius: '50%',
                 background: statusDotColor(status, iceState),
                 boxShadow: `0 0 6px ${statusDotColor(status, iceState)}`,
+                flexShrink: 0,
               }}
               aria-hidden="true"
             />
-            <span style={{ textTransform: 'capitalize' }}>{statusLabel(status, iceState, isVideo, mood)}</span>
+            <span style={{ textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis' }}>{statusLabel(status, iceState, isVideo, mood)}</span>
           </div>
 
           {(status === 'text_chat' || status === 'connected') && (
@@ -648,8 +660,8 @@ export default function ChatRoom({
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 6,
-                padding: '8px 14px',
+                gap: 4,
+                padding: '8px 12px',
                 borderRadius: 'var(--radius-pill)',
                 background: 'var(--gradient-cta)',
                 border: 'none',
@@ -657,6 +669,8 @@ export default function ChatRoom({
                 fontSize: 13,
                 fontWeight: 700,
                 cursor: 'pointer',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
               }}
             >
               Skip ⏭
