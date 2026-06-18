@@ -226,6 +226,14 @@ io.on("connection", (socket) => {
       return;
     }
 
+    // If this socket was already paired with someone, notify and unpair them first
+    const existingPartnerId = activePairs.get(socket.id);
+    if (existingPartnerId) {
+      io.to(existingPartnerId).emit('partner_left');
+      activePairs.delete(existingPartnerId);
+      activePairs.delete(socket.id);
+    }
+
     // Sanitize node structures
     const mood = data.mood || 'any';
     const mediaMode = data.mediaMode || 'text';

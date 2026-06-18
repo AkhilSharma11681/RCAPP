@@ -399,6 +399,7 @@ export default function ChatRoom({
       const payload = raw && typeof raw === 'object' ? raw : {}
       const pid = typeof payload.partnerId === 'string' ? payload.partnerId : null
       const initiator = !!payload.initiator
+      setMessages([])
       if (miloActiveRef.current && pid) {
         const bye = GOODBYE_BY_PERSONA[personaRef.current] || GOODBYE_BY_PERSONA.milo
         setMiloMessages((prev) => [...prev, { role: 'assistant', content: bye, time: nowTime() }])
