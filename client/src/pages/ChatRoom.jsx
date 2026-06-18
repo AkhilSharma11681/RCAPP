@@ -163,6 +163,7 @@ export default function ChatRoom({
   const matchSecondsRef = useRef(0)
   const waitingTimerRef = useRef(null)
   const handoffTimerRef = useRef(null)
+  const autoNextTimerRef = useRef(null)
   const miloScrollRef = useRef(null)
   const msgScrollRef = useRef(null)
 
@@ -396,6 +397,7 @@ export default function ChatRoom({
     })
 
     sock.on('match_found', (raw) => {
+      if (autoNextTimerRef.current) clearTimeout(autoNextTimerRef.current)
       const payload = raw && typeof raw === 'object' ? raw : {}
       const pid = typeof payload.partnerId === 'string' ? payload.partnerId : null
       const initiator = !!payload.initiator
@@ -439,6 +441,19 @@ export default function ChatRoom({
     sock.on('partner_left', () => {
       setStatus('partner_left')
       teardownWebRTC()
+      if (autoNextTimerRef.current) clearTimeout(autoNextTimerRef.current)
+      autoNextTimerRef.current = setTimeout(() => {
+        setStatus('waiting')
+        setMatchSeconds(0)
+        if (socketRef.current) {
+          socketRef.current.emit('find_match', {
+            mood: moodRef.current,
+            intent,
+            mediaMode: chatModeRef.current,
+            trustScore: 50,
+          })
+        }
+      }, 1500)
     })
 
     sock.on('receive_message', (data) => {
@@ -496,6 +511,7 @@ export default function ChatRoom({
       teardownWebRTC()
       if (waitingTimerRef.current) clearInterval(waitingTimerRef.current)
       if (handoffTimerRef.current) clearTimeout(handoffTimerRef.current)
+      if (autoNextTimerRef.current) clearTimeout(autoNextTimerRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
