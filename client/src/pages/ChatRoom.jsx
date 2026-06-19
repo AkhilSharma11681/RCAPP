@@ -311,7 +311,15 @@ export default function ChatRoom({
   }, [])
 
   const setupWebRTC = useCallback((remotePartnerId, isInitiator) => {
-    if (pcRef.current) return
+    if (pcRef.current) {
+      try {
+        pcRef.current.close()
+      } catch {
+        /* no-op */
+      }
+      pcRef.current = null
+      remoteStreamRef.current = null
+    }
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
     pcRef.current = pc
 
