@@ -556,10 +556,19 @@ export default function ChatRoom({
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       localStreamRef.current = stream
       setStatus('waiting')
+      const sock = socketRef.current
+      if (sock) {
+        sock.emit('find_match', {
+          mood: moodRef.current,
+          intent,
+          mediaMode: chatModeRef.current,
+          trustScore: 50,
+        })
+      }
     } catch {
       setStatus('cam_error')
     }
-  }, [])
+  }, [intent])
 
   const sendText = useCallback((text) => {
     const trimmed = (text || '').trim()
