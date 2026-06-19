@@ -157,6 +157,7 @@ export default function ChatRoom({
   const [status, setStatus] = useState(isVideo ? 'pre_permission' : 'text_connecting')
   const [matchSeconds, setMatchSeconds] = useState(0)
   const [iceState, setIceState] = useState('new')
+  const [remoteStreamVersion, setRemoteStreamVersion] = useState(0)
   const [partnerId, setPartnerId] = useState(null)
   const [messages, setMessages] = useState([])
 
@@ -342,6 +343,7 @@ export default function ChatRoom({
         remoteStreamRef.current = new MediaStream()
       }
       e.streams[0].getTracks().forEach((t) => remoteStreamRef.current.addTrack(t))
+      setRemoteStreamVersion((v) => v + 1)
     })
 
     if (localStreamRef.current) {
