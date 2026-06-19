@@ -43,8 +43,27 @@ const HANDOFF_GRACE_MS = 1800 // F4
 const STRIKE_WINDOW_MS = 60000 // §4 Resilience
 const STRIKE_LIMIT = 3
 
-// STUN config — public Google STUN. Replace with self-hosted TURN in prod.
-const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }]
+// STUN + TURN config. STUN alone only works on open/simple networks —
+// TURN is required for mobile data / NAT / college-WiFi style networks
+// where direct peer-to-peer connections get blocked.
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+]
 
 // ---------------------------------------------------------------------------
 // Local persona + analytics helpers
