@@ -419,13 +419,13 @@ export default function ChatRoom({
         return
       }
       hasJoinedRef.current = true
-      sock.emit('find_match', {
-        mood: moodRef.current,
-        intent,
-        mediaMode: chatModeRef.current,
-        trustScore: 50,
-      })
       if (chatModeRef.current === 'text') {
+        sock.emit('find_match', {
+          mood: moodRef.current,
+          intent,
+          mediaMode: chatModeRef.current,
+          trustScore: 50,
+        })
         setStatus('waiting')
       }
     })
