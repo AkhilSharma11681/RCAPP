@@ -158,6 +158,7 @@ export default function ChatRoom({
   const [matchSeconds, setMatchSeconds] = useState(0)
   const [iceState, setIceState] = useState('new')
   const [remoteStreamVersion, setRemoteStreamVersion] = useState(0)
+  const [localStreamReady, setLocalStreamReady] = useState(false)
   const [partnerId, setPartnerId] = useState(null)
   const [messages, setMessages] = useState([])
 
@@ -555,6 +556,7 @@ export default function ChatRoom({
       setStatus('connecting')
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       localStreamRef.current = stream
+      setLocalStreamReady(true)
       setStatus('waiting')
       const sock = socketRef.current
       if (sock) {

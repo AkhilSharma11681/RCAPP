@@ -93,15 +93,19 @@ function AppRoutes() {
       <Route
         path="/chat"
         element={
-          <ChatRoom
-            mood={selectedMood}
-            intent={selectedIntent}
-            safeMode={safeMode}
-            chatMode={chatMode}
-            theme={theme}
-            onToggleTheme={toggleTheme}
-            onExit={goHome}
-          />
+          selectedMood && selectedIntent ? (
+            <ChatRoom
+              mood={selectedMood}
+              intent={selectedIntent}
+              safeMode={safeMode}
+              chatMode={chatMode}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+              onExit={goHome}
+            />
+          ) : (
+            <RedirectHome />
+          )
         }
       />
       <Route
