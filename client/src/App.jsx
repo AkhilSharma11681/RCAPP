@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import Home from './pages/Home'
 import MoodSelect from './pages/MoodSelect'
 import ChatRoom from './pages/ChatRoom'
@@ -104,7 +104,7 @@ function AppRoutes() {
               onExit={goHome}
             />
           ) : (
-            <RedirectHome />
+            <Navigate to="/" replace />
           )
         }
       />
