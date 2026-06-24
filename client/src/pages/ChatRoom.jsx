@@ -186,6 +186,7 @@ export default function ChatRoom({
   const handoffTimerRef = useRef(null)
   const autoNextTimerRef = useRef(null)
   const hasJoinedRef = useRef(false)
+  const pendingIceCandidatesRef = useRef([])
   const miloScrollRef = useRef(null)
   const msgScrollRef = useRef(null)
 
@@ -321,6 +322,7 @@ export default function ChatRoom({
       pcRef.current = null
       remoteStreamRef.current = null
     }
+    pendingIceCandidatesRef.current = []
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
     pcRef.current = pc
 
@@ -382,6 +384,7 @@ export default function ChatRoom({
     const pc = pcRef.current
     if (data.type === 'offer' && data.sdp) {
       pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
+        .then(() => flushPendingIceCandidates(pc))
         .then(() => pc.createAnswer())
         .then((answer) => pc.setLocalDescription(answer))
         .then(() => {
@@ -397,15 +400,31 @@ export default function ChatRoom({
           /* ignore */
         })
     } else if (data.type === 'answer' && data.sdp) {
-      pc.setRemoteDescription(new RTCSessionDescription(data.sdp)).catch(() => {
-        /* ignore */
-      })
+      pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
+        .then(() => flushPendingIceCandidates(pc))
+        .catch(() => {
+          /* ignore */
+        })
     } else if (data.type === 'ice' && data.candidate) {
-      pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {
-        /* ignore */
-      })
+      if (pc.remoteDescription && pc.remoteDescription.type) {
+        pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {
+          /* ignore */
+        })
+      } else {
+        pendingIceCandidatesRef.current.push(data.candidate)
+      }
     }
   }, [])
+
+  function flushPendingIceCandidates(pc) {
+    const queued = pendingIceCandidatesRef.current
+    pendingIceCandidatesRef.current = []
+    queued.forEach((candidate) => {
+      pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {
+        /* ignore */
+      })
+    })
+  }
 
   // ── Socket lifecycle ──
   useEffect(() => {
