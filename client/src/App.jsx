@@ -5,6 +5,7 @@ import MoodSelect from './pages/MoodSelect'
 import ChatRoom from './pages/ChatRoom'
 import Terms from './pages/Terms'
 import OmegleAlternative from './pages/blog/OmegleAlternative'
+import { trackEvent } from './utils/analytics'
 
 function AppRoutes() {
   const navigate = useNavigate()
@@ -50,6 +51,7 @@ function AppRoutes() {
   const goToMood = () => navigate('/mood')
 
   const goToChat = ({ mood, intent, safeMode: safe, chatMode: mode }) => {
+    trackEvent('go_to_chat', { mood, intent, chatMode: mode || 'video' })
     setSelectedMood(mood)
     setSelectedIntent(intent)
     setSafeMode(safe)
