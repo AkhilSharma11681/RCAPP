@@ -571,12 +571,14 @@ export default function ChatRoom({
   }, [])
 
   const requestCamera = useCallback(async () => {
+    trackEvent('camera_permission_requested')
     try {
       setStatus('connecting')
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       localStreamRef.current = stream
       setLocalStreamReady(true)
       setStatus('waiting')
+      trackEvent('camera_permission_granted')
       const sock = socketRef.current
       if (sock) {
         sock.emit('find_match', {
@@ -586,7 +588,8 @@ export default function ChatRoom({
           trustScore: 50,
         })
       }
-    } catch {
+    } catch (err) {
+      trackEvent('camera_permission_denied', { error: String(err && err.name) })
       setStatus('cam_error')
     }
   }, [intent])
@@ -749,8 +752,8 @@ export default function ChatRoom({
             minHeight: 0,
           }}
         >
-          {status === 'pre_permission' && <PrePermissionView onAllow={requestCamera} onExit={onExit} />}
-          {status === 'cam_error' && <ErrorView title="Camera access denied" onExit={onExit} />}
+          {status === 'pre_permission' && <PrePermissionView onAllow={requestCamera} onExit={() => { trackEvent('pre_permission_exited'); onExit() }} />}
+          {status === 'cam_error' && <ErrorView title="Camera access denied" onRetry={requestCamera} onExit={() => { trackEvent('cam_error_exited'); onExit() }} />}
           {(status === 'waiting' || status === 'text_connecting') && (
             <MatchingView
               mood={mood}
@@ -852,7 +855,7 @@ function PrePermissionView({ onAllow, onExit }) {
   )
 }
 
-function ErrorView({ title, onExit }) {
+function ErrorView({ title, onRetry, onExit }) {
   return (
     <Center>
       <div
@@ -870,8 +873,14 @@ function ErrorView({ title, onExit }) {
       >
         ⚠️
       </div>
-      <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 16 }}>{title}</h2>
-      <GhostButton onClick={onExit}>Go back</GhostButton>
+      <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}>{title}</h2>
+      <p style={{ color: 'var(--text-3)', fontSize: 14, marginBottom: 20, maxWidth: 320, lineHeight: 1.5, textAlign: 'center' }}>
+        Check your browser's site settings (click the lock icon in the address bar) and allow camera & microphone, then try again.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 'min(100%, 320px)' }}>
+        {onRetry && <PrimaryButton onClick={onRetry}>Try Again</PrimaryButton>}
+        <GhostButton onClick={onExit}>Go back</GhostButton>
+      </div>
     </Center>
   )
 }
