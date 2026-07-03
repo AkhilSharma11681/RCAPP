@@ -1030,6 +1030,20 @@ function MatchingView({ mood, matchSeconds, hint, miloActive }) {
 }
 
 function PartnerLeftView({ onNext, onExit }) {
+  const handleShare = () => {
+    trackEvent('share_clicked', { trigger: 'partner_left' })
+    if (navigator.share) {
+      navigator.share({
+        title: 'Miloo — Free Random Video Chat',
+        text: 'Met someone interesting on Miloo! Try it — free random video chat, no signup needed.',
+        url: 'https://www.miloo.chat',
+      }).catch(() => {})
+    } else {
+      navigator.clipboard.writeText('https://www.miloo.chat').then(() => {
+        alert('Link copied! Share miloo.chat with your friends 🎉')
+      }).catch(() => {})
+    }
+  }
   return (
     <Center>
       <div
@@ -1051,6 +1065,25 @@ function PartnerLeftView({ onNext, onExit }) {
       <p style={{ color: 'var(--text-3)', fontSize: 14, marginBottom: 24 }}>Find the next person?</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 'min(100%, 320px)' }}>
         <PrimaryButton onClick={onNext}>Find next</PrimaryButton>
+        <button
+          onClick={handleShare}
+          style={{
+            background: 'transparent',
+            border: '1px solid var(--border-1)',
+            borderRadius: 'var(--radius-pill)',
+            color: 'var(--text-2)',
+            fontSize: 14,
+            fontWeight: 600,
+            padding: '10px 18px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+          }}
+        >
+          🔗 Share Miloo with a friend
+        </button>
         <GhostButton onClick={onExit}>Go home</GhostButton>
       </div>
     </Center>
