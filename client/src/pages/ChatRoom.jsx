@@ -841,7 +841,7 @@ export default function ChatRoom({
               iceState={iceState}
               messages={messages}
               sendText={sendText}
-              localStream={localStreamRef.current}
+              localStream={localStreamReady ? localStreamRef.current : null}
               remoteStream={remoteStreamRef.current}
               remoteStreamVersion={remoteStreamVersion}
               scrollRef={msgScrollRef}
