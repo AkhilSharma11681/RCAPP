@@ -46,18 +46,28 @@ const STRIKE_LIMIT = 3
 // STUN + TURN config. STUN alone only works on open/simple networks —
 // TURN is required for mobile data / NAT / college-WiFi style networks
 // where direct peer-to-peer connections get blocked.
+const METERED_API_KEY = import.meta.env.VITE_METERED_API_KEY || ''
+
+async function fetchIceServers() {
+  try {
+    const res = await fetch(
+      `https://miloo-chat.metered.live/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`
+    )
+    const servers = await res.json()
+    if (Array.isArray(servers) && servers.length > 0) return servers
+  } catch (e) {
+    console.warn('TURN fetch failed, using STUN only', e)
+  }
+  return [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ]
+}
+
+// Placeholder — will be replaced dynamically before RTCPeerConnection
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
-  {
-    urls: 'turn:openrelay.metered.ca:80',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
+  { urls: 'stun:stun1.l.google.com:19302' },
   {
     urls: 'turn:openrelay.metered.ca:443?transport=tcp',
     username: 'openrelayproject',
@@ -312,7 +322,7 @@ export default function ChatRoom({
     setIceState('closed')
   }, [])
 
-  const setupWebRTC = useCallback((remotePartnerId, isInitiator) => {
+  const setupWebRTC = useCallback(async (remotePartnerId, isInitiator) => {
     if (pcRef.current) {
       try {
         pcRef.current.close()
@@ -323,7 +333,8 @@ export default function ChatRoom({
       remoteStreamRef.current = null
     }
     pendingIceCandidatesRef.current = []
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    const iceServers = await fetchIceServers()
+    const pc = new RTCPeerConnection({ iceServers })
     pcRef.current = pc
 
     pc.addEventListener('iceconnectionstatechange', () => {
