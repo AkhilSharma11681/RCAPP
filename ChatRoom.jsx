@@ -1404,7 +1404,7 @@ function MiloPanel({
   )
 }
 
-function ChatView({ isVideo, iceState, messages, sendText, localStream, remoteStream, remoteStreamVersion, scrollRef }) {
+function ChatView({ isVideo, iceState, messages, sendText, localStream, remoteStream, scrollRef }) {
   return (
     <section
       aria-live="polite"
@@ -1419,7 +1419,7 @@ function ChatView({ isVideo, iceState, messages, sendText, localStream, remoteSt
       }}
     >
       {isVideo ? (
-        <VideoStage key={remoteStreamVersion} iceState={iceState} localStream={localStream} remoteStream={remoteStream} />
+        <VideoStage iceState={iceState} localStream={localStream} remoteStream={remoteStream} />
       ) : (
         <>
           <div
