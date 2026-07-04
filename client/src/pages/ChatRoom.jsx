@@ -502,12 +502,21 @@ export default function ChatRoom({
       }
 
       if (chatModeRef.current === 'video' && pid && typeof pid === 'string') {
-        try {
-          setupWebRTC(pid, !!initiator)
-        } catch (err) {
-          trackEvent('webrtc_setup_failed', { error: String(err && err.message) })
-          setStatus('partner_left')
+        // If localStream was lost (e.g. after skip), re-request camera before WebRTC
+        const startWebRTC = async () => {
+          try {
+            if (!localStreamRef.current) {
+              const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+              localStreamRef.current = stream
+              setLocalStreamReady(true)
+            }
+            await setupWebRTC(pid, !!initiator)
+          } catch (err) {
+            trackEvent('webrtc_setup_failed', { error: String(err && err.message) })
+            setStatus('cam_error')
+          }
         }
+        startWebRTC()
       }
     })
 
