@@ -365,18 +365,18 @@ export default function ChatRoom({
     })
 
     pc.addEventListener('track', (e) => {
-      // Always create a fresh MediaStream for each new connection
-      // to avoid stale tracks from previous sessions after skip
-      if (!remoteStreamRef.current) {
-        remoteStreamRef.current = new MediaStream()
-      }
+      console.log('[WebRTC] ontrack fired', e.track?.kind, 'streams:', e.streams?.length)
+      remoteStreamRef.current = new MediaStream()
       if (e.streams && e.streams[0]) {
-        // Replace entire stream with fresh one from new peer
-        remoteStreamRef.current = new MediaStream()
-        e.streams[0].getTracks().forEach((t) => remoteStreamRef.current.addTrack(t))
+        e.streams[0].getTracks().forEach((t) => {
+          console.log('[WebRTC] adding track:', t.kind, 'enabled:', t.enabled, 'readyState:', t.readyState)
+          remoteStreamRef.current.addTrack(t)
+        })
       } else if (e.track) {
+        console.log('[WebRTC] adding single track:', e.track.kind)
         remoteStreamRef.current.addTrack(e.track)
       }
+      console.log('[WebRTC] remoteStream tracks:', remoteStreamRef.current.getTracks().length)
       setRemoteStreamVersion((v) => v + 1)
     })
 
