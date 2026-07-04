@@ -298,7 +298,7 @@ export default function ChatRoom({
   }, [miloInput])
 
   // ── WebRTC helpers ──
-  const teardownWebRTC = useCallback(() => {
+  const teardownWebRTC = useCallback((stopLocalStream = false) => {
     try {
       if (pcRef.current) {
         pcRef.current.getSenders().forEach((s) => {
@@ -314,12 +314,16 @@ export default function ChatRoom({
       /* no-op */
     }
     pcRef.current = null
-    if (localStreamRef.current) {
+    // Only stop local camera stream on full exit, NOT on skip
+    // so camera stays active between matches
+    if (stopLocalStream && localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => t.stop())
       localStreamRef.current = null
+      setLocalStreamReady(false)
     }
     remoteStreamRef.current = null
-    setIceState('closed')
+    setRemoteStreamVersion((v) => v + 1)
+    setIceState('new')
   }, [])
 
   const setupWebRTC = useCallback(async (remotePartnerId, isInitiator) => {
@@ -573,7 +577,7 @@ export default function ChatRoom({
     return () => {
       try { sock.disconnect() } catch { /* no-op */ }
       socketRef.current = null
-      teardownWebRTC()
+      teardownWebRTC(true)
       if (waitingTimerRef.current) clearInterval(waitingTimerRef.current)
       if (handoffTimerRef.current) clearTimeout(handoffTimerRef.current)
       if (autoNextTimerRef.current) clearTimeout(autoNextTimerRef.current)
@@ -634,8 +638,12 @@ export default function ChatRoom({
   }, [miloActive, matchSeconds])
 
   const findNext = useCallback(() => {
+    teardownWebRTC(false)
     setStatus('waiting')
     setMatchSeconds(0)
+    setMessages([])
+    remoteStreamRef.current = null
+    setRemoteStreamVersion((v) => v + 1)
     if (socketRef.current) {
       socketRef.current.emit('find_match', {
         mood: moodRef.current,
@@ -644,7 +652,7 @@ export default function ChatRoom({
         trustScore: 50,
       })
     }
-  }, [intent])
+  }, [intent, teardownWebRTC])
 
   // ── Render ──
   return (
