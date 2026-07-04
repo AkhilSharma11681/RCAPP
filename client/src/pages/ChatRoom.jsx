@@ -418,8 +418,14 @@ export default function ChatRoom({
   }, [])
 
   const handleWebRTCSignal = useCallback((data) => {
-    if (!data || !pcRef.current) return
+    if (!data) return
+    // Always read pcRef.current at call time, not at closure creation time
     const pc = pcRef.current
+    if (!pc) {
+      console.warn('[Signal] pcRef.current is null, ignoring signal', data.type)
+      return
+    }
+    console.log('[Signal] received', data.type, 'pc state:', pc.signalingState)
     if (data.type === 'offer' && data.sdp) {
       pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
         .then(() => flushPendingIceCandidates(pc))
@@ -434,8 +440,8 @@ export default function ChatRoom({
             })
           }
         })
-        .catch(() => {
-          /* ignore */
+        .catch((err) => {
+          console.error('[Signal] offer handling failed:', err)
         })
     } else if (data.type === 'answer' && data.sdp) {
       pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
