@@ -365,10 +365,18 @@ export default function ChatRoom({
     })
 
     pc.addEventListener('track', (e) => {
+      // Always create a fresh MediaStream for each new connection
+      // to avoid stale tracks from previous sessions after skip
       if (!remoteStreamRef.current) {
         remoteStreamRef.current = new MediaStream()
       }
-      e.streams[0].getTracks().forEach((t) => remoteStreamRef.current.addTrack(t))
+      if (e.streams && e.streams[0]) {
+        // Replace entire stream with fresh one from new peer
+        remoteStreamRef.current = new MediaStream()
+        e.streams[0].getTracks().forEach((t) => remoteStreamRef.current.addTrack(t))
+      } else if (e.track) {
+        remoteStreamRef.current.addTrack(e.track)
+      }
       setRemoteStreamVersion((v) => v + 1)
     })
 
