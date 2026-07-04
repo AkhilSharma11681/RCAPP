@@ -46,7 +46,7 @@ const STRIKE_LIMIT = 3
 // STUN + TURN config. STUN alone only works on open/simple networks —
 // TURN is required for mobile data / NAT / college-WiFi style networks
 // where direct peer-to-peer connections get blocked.
-const METERED_API_KEY = import.meta.env.VITE_METERED_API_KEY || ''
+const METERED_API_KEY = import.meta.env.VITE_METERED_API_KEY || '0a59d59716c0099d36877a25e50a65cf8e2a'
 
 async function fetchIceServers() {
   try {
