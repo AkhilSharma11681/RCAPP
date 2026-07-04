@@ -1502,11 +1502,14 @@ function VideoStage({ iceState, localStream, remoteStream }) {
   const localRef = useRef(null)
   const remoteRef = useRef(null)
   useEffect(() => {
-    if (localRef.current && localStream && localRef.current.srcObject !== localStream) {
-      localRef.current.srcObject = localStream
+    if (localRef.current) {
+      localRef.current.srcObject = localStream || null
     }
   }, [localStream])
   useEffect(() => {
+    if (remoteRef.current) {
+      remoteRef.current.srcObject = remoteStream || null
+    }
     if (remoteRef.current && remoteStream && remoteRef.current.srcObject !== remoteStream) {
       remoteRef.current.srcObject = remoteStream
     }
