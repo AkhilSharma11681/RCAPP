@@ -380,6 +380,21 @@ export default function ChatRoom({
       setRemoteStreamVersion((v) => v + 1)
     })
 
+    // Restart any ended tracks before adding to new peer connection
+    if (localStreamRef.current) {
+      const endedTracks = localStreamRef.current.getTracks().filter(t => t.readyState === 'ended')
+      if (endedTracks.length > 0) {
+        console.log('[WebRTC] restarting ended tracks, count:', endedTracks.length)
+        try {
+          const freshStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+          localStreamRef.current.getTracks().forEach(t => t.stop())
+          localStreamRef.current = freshStream
+          setLocalStreamReady(true)
+        } catch (e) {
+          console.warn('[WebRTC] failed to restart camera', e)
+        }
+      }
+    }
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => pc.addTrack(t, localStreamRef.current))
     }
