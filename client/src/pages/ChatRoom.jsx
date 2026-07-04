@@ -389,7 +389,8 @@ export default function ChatRoom({
           const freshStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
           localStreamRef.current.getTracks().forEach(t => t.stop())
           localStreamRef.current = freshStream
-          setLocalStreamReady(true)
+          setLocalStreamReady(false)
+          setTimeout(() => setLocalStreamReady(true), 50)
         } catch (e) {
           console.warn('[WebRTC] failed to restart camera', e)
         }
