@@ -157,15 +157,13 @@ function findMatch(socketId) {
   // Tier 1: Same Mood × Same Media Mode
   let filtered = candidates.filter(u => u.mood === current.mood && u.mediaMode === current.mediaMode);
 
-  // Tier 2: Any Mood × Same Media Mode
+  // Tier 2: Any Mood × Same Media Mode (mediaMode MUST always match)
   if (filtered.length === 0) {
     filtered = candidates.filter(u => u.mediaMode === current.mediaMode);
   }
 
-  // Tier 3: Same Mood × Any Media Mode
-  if (filtered.length === 0) {
-    filtered = candidates.filter(u => u.mood === current.mood);
-  }
+  // NOTE: Tier 3 removed — video users must ONLY match with video users
+  // and text users must ONLY match with text users
 
   if (filtered.length === 0) return null;
 
