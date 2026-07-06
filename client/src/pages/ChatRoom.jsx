@@ -1444,6 +1444,7 @@ function MiloPanel({
 }
 
 function ChatView({ isVideo, iceState, messages, sendText, localStream, remoteStream, remoteStreamVersion, scrollRef }) {
+  const [showChat, setShowChat] = React.useState(false)
   return (
     <section
       aria-live="polite"
@@ -1453,12 +1454,106 @@ function ChatView({ isVideo, iceState, messages, sendText, localStream, remoteSt
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
-        padding: 'clamp(12px, 3vw, 20px)',
-        gap: 12,
+        padding: isVideo ? '0' : 'clamp(12px, 3vw, 20px)',
+        gap: isVideo ? 0 : 12,
+        position: 'relative',
       }}
     >
       {isVideo ? (
-        <VideoStage key={remoteStreamVersion} iceState={iceState} localStream={localStream} remoteStream={remoteStream} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
+          {/* Video Stage */}
+          <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+            <VideoStage key={remoteStreamVersion} iceState={iceState} localStream={localStream} remoteStream={remoteStream} />
+          </div>
+
+          {/* Chat Toggle Button */}
+          <button
+            onClick={() => setShowChat(v => !v)}
+            style={{
+              position: 'absolute',
+              bottom: showChat ? 'calc(clamp(160px, 35vh, 280px) + 12px)' : 12,
+              left: 12,
+              zIndex: 20,
+              background: showChat ? 'var(--accent)' : 'rgba(0,0,0,0.6)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 'var(--radius-pill)',
+              color: '#fff',
+              fontSize: 13,
+              fontWeight: 600,
+              padding: '6px 14px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'all 0.2s ease',
+            }}
+          >
+            💬 {showChat ? 'Hide Chat' : 'Chat'}
+            {messages.length > 0 && !showChat && (
+              <span style={{
+                background: 'var(--accent)',
+                borderRadius: '50%',
+                width: 18,
+                height: 18,
+                fontSize: 10,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                {messages.length > 9 ? '9+' : messages.length}
+              </span>
+            )}
+          </button>
+
+          {/* Slide-up Chat Panel over video */}
+          {showChat && (
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 'clamp(160px, 35vh, 280px)',
+              background: 'rgba(10,10,15,0.85)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              borderTop: '1px solid rgba(255,255,255,0.1)',
+              display: 'flex',
+              flexDirection: 'column',
+              zIndex: 15,
+              borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
+            }}>
+              {/* Messages */}
+              <div
+                ref={scrollRef}
+                className="no-scrollbar"
+                style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '10px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}
+              >
+                {messages.length === 0 ? (
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', margin: 'auto' }}>
+                    Say something 👋
+                  </p>
+                ) : (
+                  messages.map((m, i) => (
+                    <MessageBubble key={i} role={m.from === 'me' ? 'user' : 'assistant'} time={m.time}>
+                      {m.text}
+                    </MessageBubble>
+                  ))
+                )}
+              </div>
+              {/* Input */}
+              <ChatInput onSend={sendText} placeholder="Type a message…" />
+            </div>
+          )}
+        </div>
       ) : (
         <>
           <div
