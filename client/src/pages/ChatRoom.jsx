@@ -1461,43 +1461,41 @@ function ChatView({ isVideo, iceState, messages, sendText, localStream, remoteSt
     >
       {isVideo ? (
         <div style={{ 
-          flex: 1, 
+          flex: 1,
           display: 'flex', 
           flexDirection: 'column', 
           minHeight: 0,
-          height: '100%',
+          overflow: 'hidden',
         }}>
-          {/* Video — takes remaining space above chat */}
+          {/* VIDEO — fixed height, never cut */}
           <div style={{ 
-            flex: showChat ? '1 1 55%' : '1 1 100%',
-            minHeight: 0,
+            flex: showChat ? '0 0 55%' : '1 1 100%',
             position: 'relative',
-            transition: 'flex 0.25s ease',
+            minHeight: 0,
+            background: '#000',
           }}>
             <VideoStage key={remoteStreamVersion} iceState={iceState} localStream={localStream} remoteStream={remoteStream} />
-
-            {/* Chat toggle button — always visible over video */}
+            {/* Chat toggle */}
             <button
               onClick={() => setShowChat(v => !v)}
               style={{
                 position: 'absolute',
                 bottom: 12,
-                left: 12,
+                right: 12,
                 zIndex: 20,
-                background: showChat ? 'var(--accent)' : 'rgba(0,0,0,0.65)',
+                background: showChat ? 'var(--accent)' : 'rgba(0,0,0,0.7)',
                 backdropFilter: 'blur(8px)',
                 WebkitBackdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255,255,255,0.15)',
+                border: '1px solid rgba(255,255,255,0.2)',
                 borderRadius: 'var(--radius-pill)',
                 color: '#fff',
                 fontSize: 13,
                 fontWeight: 600,
-                padding: '7px 16px',
+                padding: '8px 16px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                transition: 'background 0.2s ease',
               }}
             >
               💬 {showChat ? 'Hide Chat' : 'Chat'}
@@ -1505,13 +1503,14 @@ function ChatView({ isVideo, iceState, messages, sendText, localStream, remoteSt
                 <span style={{
                   background: '#ef4444',
                   borderRadius: '50%',
-                  width: 18,
+                  minWidth: 18,
                   height: 18,
                   fontSize: 10,
                   fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  padding: '0 4px',
                 }}>
                   {messages.length > 9 ? '9+' : messages.length}
                 </span>
@@ -1519,17 +1518,28 @@ function ChatView({ isVideo, iceState, messages, sendText, localStream, remoteSt
             </button>
           </div>
 
-          {/* Chat Panel — below video, not overlapping */}
+          {/* CHAT PANEL — completely below video, proper section */}
           {showChat && (
             <div style={{
               flex: '0 0 45%',
-              maxHeight: '45%',
               display: 'flex',
               flexDirection: 'column',
-              background: 'var(--bg-0)',
-              borderTop: '1px solid var(--border-1)',
+              background: 'var(--bg-1)',
+              borderTop: '2px solid var(--accent)',
+              minHeight: 0,
             }}>
-              {/* Messages scroll area */}
+              {/* Header */}
+              <div style={{
+                padding: '8px 14px',
+                borderBottom: '1px solid var(--border-1)',
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--text-3)',
+                flexShrink: 0,
+              }}>
+                💬 Chat with stranger
+              </div>
+              {/* Messages */}
               <div
                 ref={scrollRef}
                 className="no-scrollbar"
@@ -1539,7 +1549,8 @@ function ChatView({ isVideo, iceState, messages, sendText, localStream, remoteSt
                   padding: '10px 14px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 6,
+                  gap: 8,
+                  minHeight: 0,
                 }}
               >
                 {messages.length === 0 ? (
@@ -1548,9 +1559,8 @@ function ChatView({ isVideo, iceState, messages, sendText, localStream, remoteSt
                     fontSize: 13, 
                     textAlign: 'center', 
                     margin: 'auto',
-                    padding: '20px 0',
                   }}>
-                    Say something 👋
+                    Say hi 👋
                   </p>
                 ) : (
                   messages.map((m, i) => (
@@ -1560,8 +1570,10 @@ function ChatView({ isVideo, iceState, messages, sendText, localStream, remoteSt
                   ))
                 )}
               </div>
-              {/* Input */}
-              <ChatInput onSend={sendText} placeholder="Type a message…" />
+              {/* Input — always visible at bottom */}
+              <div style={{ flexShrink: 0 }}>
+                <ChatInput onSend={sendText} placeholder="Type a message…" />
+              </div>
             </div>
           )}
         </div>
