@@ -5,6 +5,7 @@ import MoodSelect from './pages/MoodSelect'
 import ChatRoom from './pages/ChatRoom'
 import Terms from './pages/Terms'
 import OmegleAlternative from './pages/blog/OmegleAlternative'
+import RandomVideoChatIndia from './pages/blog/RandomVideoChatIndia'
 import { trackEvent } from './utils/analytics'
 
 function AppRoutes() {
@@ -119,6 +120,10 @@ function AppRoutes() {
       <Route
         path="/blog/omegle-alternative"
         element={<OmegleAlternative />}
+      />
+      <Route
+        path="/blog/random-video-chat-india"
+        element={<RandomVideoChatIndia />}
       />
       {/* Catch-all: redirect unknown paths to home */}
       <Route path="*" element={<RedirectHome />} />
