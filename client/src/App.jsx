@@ -6,6 +6,8 @@ import ChatRoom from './pages/ChatRoom'
 import Terms from './pages/Terms'
 import OmegleAlternative from './pages/blog/OmegleAlternative'
 import RandomVideoChatIndia from './pages/blog/RandomVideoChatIndia'
+import StrangerChatIndia from './pages/blog/StrangerChatIndia'
+import VideoChatNoSignup from './pages/blog/VideoChatNoSignup'
 import { trackEvent } from './utils/analytics'
 
 function AppRoutes() {
@@ -124,6 +126,10 @@ function AppRoutes() {
       <Route
         path="/blog/random-video-chat-india"
         element={<RandomVideoChatIndia />}
+      />
+      <Route path="/blog/stranger-chat-india" element={<StrangerChatIndia />}
+      />
+      <Route path="/blog/video-chat-no-signup" element={<VideoChatNoSignup />}
       />
       {/* Catch-all: redirect unknown paths to home */}
       <Route path="*" element={<RedirectHome />} />
