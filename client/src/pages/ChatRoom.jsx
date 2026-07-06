@@ -1460,85 +1460,96 @@ function ChatView({ isVideo, iceState, messages, sendText, localStream, remoteSt
       }}
     >
       {isVideo ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
-          {/* Video Stage */}
-          <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        <div style={{ 
+          flex: 1, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          minHeight: 0,
+          height: '100%',
+        }}>
+          {/* Video — takes remaining space above chat */}
+          <div style={{ 
+            flex: showChat ? '1 1 55%' : '1 1 100%',
+            minHeight: 0,
+            position: 'relative',
+            transition: 'flex 0.25s ease',
+          }}>
             <VideoStage key={remoteStreamVersion} iceState={iceState} localStream={localStream} remoteStream={remoteStream} />
-          </div>
 
-          {/* Chat Toggle Button */}
-          <button
-            onClick={() => setShowChat(v => !v)}
-            style={{
-              position: 'absolute',
-              bottom: showChat ? 'calc(clamp(160px, 35vh, 280px) + 12px)' : 12,
-              left: 12,
-              zIndex: 20,
-              background: showChat ? 'var(--accent)' : 'rgba(0,0,0,0.6)',
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: 'var(--radius-pill)',
-              color: '#fff',
-              fontSize: 13,
-              fontWeight: 600,
-              padding: '6px 14px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              transition: 'all 0.2s ease',
-            }}
-          >
-            💬 {showChat ? 'Hide Chat' : 'Chat'}
-            {messages.length > 0 && !showChat && (
-              <span style={{
-                background: 'var(--accent)',
-                borderRadius: '50%',
-                width: 18,
-                height: 18,
-                fontSize: 10,
+            {/* Chat toggle button — always visible over video */}
+            <button
+              onClick={() => setShowChat(v => !v)}
+              style={{
+                position: 'absolute',
+                bottom: 12,
+                left: 12,
+                zIndex: 20,
+                background: showChat ? 'var(--accent)' : 'rgba(0,0,0,0.65)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 'var(--radius-pill)',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 600,
+                padding: '7px 16px',
+                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                {messages.length > 9 ? '9+' : messages.length}
-              </span>
-            )}
-          </button>
+                gap: 6,
+                transition: 'background 0.2s ease',
+              }}
+            >
+              💬 {showChat ? 'Hide Chat' : 'Chat'}
+              {messages.length > 0 && !showChat && (
+                <span style={{
+                  background: '#ef4444',
+                  borderRadius: '50%',
+                  width: 18,
+                  height: 18,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  {messages.length > 9 ? '9+' : messages.length}
+                </span>
+              )}
+            </button>
+          </div>
 
-          {/* Slide-up Chat Panel over video */}
+          {/* Chat Panel — below video, not overlapping */}
           {showChat && (
             <div style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: 'clamp(160px, 35vh, 280px)',
-              background: 'rgba(10,10,15,0.85)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-              borderTop: '1px solid rgba(255,255,255,0.1)',
+              flex: '0 0 45%',
+              maxHeight: '45%',
               display: 'flex',
               flexDirection: 'column',
-              zIndex: 15,
-              borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
+              background: 'var(--bg-0)',
+              borderTop: '1px solid var(--border-1)',
             }}>
-              {/* Messages */}
+              {/* Messages scroll area */}
               <div
                 ref={scrollRef}
                 className="no-scrollbar"
                 style={{
                   flex: 1,
                   overflowY: 'auto',
-                  padding: '10px 12px',
+                  padding: '10px 14px',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 6,
                 }}
               >
                 {messages.length === 0 ? (
-                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', margin: 'auto' }}>
+                  <p style={{ 
+                    color: 'var(--text-3)', 
+                    fontSize: 13, 
+                    textAlign: 'center', 
+                    margin: 'auto',
+                    padding: '20px 0',
+                  }}>
                     Say something 👋
                   </p>
                 ) : (
