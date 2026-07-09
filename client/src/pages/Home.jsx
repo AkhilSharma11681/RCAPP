@@ -242,7 +242,13 @@ export default function Home({
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
           <FooterLink onClick={onTerms}>Safety</FooterLink>
           <FooterLink onClick={() => navigate('/blog/omegle-alternative')}>
-            Blog
+            Omegle Alternative
+          </FooterLink>
+          <FooterLink onClick={() => navigate('/blog/random-video-chat-india')}>
+            Random Video Chat
+          </FooterLink>
+          <FooterLink onClick={() => navigate('/blog/stranger-chat-india')}>
+            Stranger Chat
           </FooterLink>
         </div>
       </footer>
