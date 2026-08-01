@@ -34,7 +34,7 @@ export default function OmegleAlternative() {
         'Looking for Omegle alternatives? Try Miloo — free random chat, no signup needed. Top picks for India in 2026.',
       url: 'https://www.miloo.chat/blog/omegle-alternative',
       datePublished: '2026-04-20',
-      dateModified: '2026-04-20',
+      dateModified: '2026-08-01',
       publisher: { '@type': 'Organization', name: 'Miloo', url: 'https://www.miloo.chat' },
       author: { '@type': 'Organization', name: 'Miloo' },
     })
