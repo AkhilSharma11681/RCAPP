@@ -843,7 +843,7 @@ export default function ChatRoom({
               messages={messages}
               sendText={sendText}
               localStream={localStreamReady ? localStreamRef.current : null}
-              remoteStream={remoteStreamRef.current}
+              remoteStream={remoteStreamVersion > 0 ? remoteStreamRef.current : null}
               remoteStreamVersion={remoteStreamVersion}
               scrollRef={msgScrollRef}
             />
