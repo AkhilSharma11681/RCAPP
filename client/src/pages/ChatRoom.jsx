@@ -340,6 +340,13 @@ export default function ChatRoom({
     const iceServers = await fetchIceServers()
     const pc = new RTCPeerConnection({ iceServers })
     pcRef.current = pc
+    // Flush any signals that arrived before pcRef was ready
+    const buffered = pendingIceCandidatesRef.current.splice(0)
+    buffered.forEach(sig => {
+      if (sig.type === 'offer' || sig.type === 'answer' || sig.type === 'ice') {
+        handleWebRTCSignal(sig)
+      }
+    })
 
     pc.addEventListener('iceconnectionstatechange', () => {
       const s = pc.iceConnectionState
@@ -420,10 +427,11 @@ export default function ChatRoom({
 
   const handleWebRTCSignal = useCallback((data) => {
     if (!data) return
-    // Always read pcRef.current at call time, not at closure creation time
     const pc = pcRef.current
     if (!pc) {
-      console.warn('[Signal] pcRef.current is null, ignoring signal', data.type)
+      // Buffer the signal — setupWebRTC may not be ready yet
+      console.warn('[Signal] pcRef.current is null, buffering signal', data.type)
+      pendingIceCandidatesRef.current.push(data)
       return
     }
     console.log('[Signal] received', data.type, 'pc state:', pc.signalingState)
@@ -1662,14 +1670,17 @@ function VideoStage({ iceState, localStream, remoteStream }) {
   useEffect(() => {
     if (localRef.current) {
       localRef.current.srcObject = localStream || null
+      if (localStream) localRef.current.play().catch(() => {})
     }
   }, [localStream])
   useEffect(() => {
     if (remoteRef.current) {
       remoteRef.current.srcObject = remoteStream || null
+      if (remoteStream) remoteRef.current.play().catch(() => {})
     }
     if (remoteRef.current && remoteStream && remoteRef.current.srcObject !== remoteStream) {
       remoteRef.current.srcObject = remoteStream
+      remoteRef.current.play().catch(() => {})
     }
   }, [remoteStream])
 
