@@ -850,7 +850,7 @@ export default function ChatRoom({
               iceState={iceState}
               messages={messages}
               sendText={sendText}
-              localStream={localStreamReady ? localStreamRef.current : null}
+              localStream={localStreamReady && localStreamRef.current ? localStreamRef.current : null}
               remoteStream={remoteStreamVersion > 0 ? remoteStreamRef.current : null}
               remoteStreamVersion={remoteStreamVersion}
               scrollRef={msgScrollRef}
@@ -1691,19 +1691,20 @@ function VideoStage({ iceState, localStream, remoteStream }) {
     <div
       style={{
         flex: 1,
-        display: 'grid',
-        gridTemplateColumns: '1fr',
-        gap: 12,
+        display: 'flex',
+        flexDirection: 'column',
         minHeight: 0,
+        height: '100%',
       }}
     >
       <div
         style={{
           position: 'relative',
+          flex: 1,
+          minHeight: 0,
           borderRadius: 'var(--radius-lg)',
           overflow: 'hidden',
           background: '#000',
-          minHeight: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
