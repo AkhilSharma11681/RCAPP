@@ -418,3 +418,76 @@ app.post('/api/bot-chat', async (req, res) => {
     res.status(500).json({ error: "Failed to generate bot response" });
   }
 });
+
+// --- SOCKET.IO AUTO-BOT MATCHMAKING HOOK ---
+const userSessionTimers = new Map();
+
+io.on('connection', (socket) => {
+  let botTimer = null;
+
+  socket.on('find_partner', () => {
+    // 5 second wait before connecting to AI Bot if no human found
+    botTimer = setTimeout(() => {
+      const startTime = Date.now();
+      userSessionTimers.set(socket.id, startTime);
+
+      socket.emit('match_found', {
+        partnerId: 'BOT_MAYA_PARTNER',
+        isBot: true,
+        message: 'Connected with a stranger'
+      });
+    }, 5000);
+  });
+
+  socket.on('cancel_search', () => {
+    if (botTimer) clearTimeout(botTimer);
+  });
+
+  socket.on('send_bot_message', async (data) => {
+    const { messages = [] } = data;
+    const startTime = userSessionTimers.get(socket.id) || Date.now();
+    const sessionTimeMinutes = Math.floor((Date.now() - startTime) / 60000);
+
+    // Show 'typing...' event to client
+    socket.emit('bot_typing', { isTyping: true });
+
+    try {
+      let timeContext = `Current chat duration: ${sessionTimeMinutes} minutes.`;
+      if (sessionTimeMinutes < 5) {
+        timeContext += " DO NOT share/ask for social media IDs yet. Strictly decline if requested.";
+      } else if (sessionTimeMinutes >= 10) {
+        timeContext += " Ask for their Instagram/Snapchat ID now and prepare to say goodbye.";
+      }
+
+      const response = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: `${SYSTEM_PROMPT}\n\n[${timeContext}]` },
+          ...messages
+        ],
+        temperature: 0.85,
+        max_tokens: 120,
+      });
+
+      const replyText = response.choices[0].message.content;
+
+      // Realistic typing delay (1.5s - 3s)
+      setTimeout(() => {
+        socket.emit('bot_typing', { isTyping: false });
+        socket.emit('receive_bot_message', {
+          sender: 'BOT_MAYA_PARTNER',
+          text: replyText
+        });
+      }, Math.floor(Math.random() * 1500) + 1500);
+
+    } catch (err) {
+      console.error("Bot socket message error:", err);
+      socket.emit('bot_typing', { isTyping: false });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    if (botTimer) clearTimeout(botTimer);
+    userSessionTimers.delete(socket.id);
+  });
+});
