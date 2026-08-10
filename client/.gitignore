@@ -23,3 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Security & System Files[cite: 1]
+.env[cite: 1]
+.env.local[cite: 1]
+.DS_Store[cite: 1]
+node_modules/[cite: 1]
