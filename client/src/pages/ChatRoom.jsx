@@ -167,6 +167,7 @@ export default function ChatRoom({
   const [status, setStatus] = useState(isVideo ? 'pre_permission' : 'text_connecting')
   const [matchSeconds, setMatchSeconds] = useState(0)
   const [iceState, setIceState] = useState('new')
+  const [isStrangerTyping, setIsStrangerTyping] = useState(false)
   const [remoteStreamVersion, setRemoteStreamVersion] = useState(0)
   const [localStreamReady, setLocalStreamReady] = useState(false)
   const [partnerId, setPartnerId] = useState(null)
@@ -578,6 +579,9 @@ export default function ChatRoom({
       setMessages((prev) => [...prev, { from: 'stranger', text, time: nowTime() }])
     })
 
+    sock.on('stranger_typing', (isTyping) => {
+      setIsStrangerTyping(isTyping)
+    })
     sock.on('slow_down', ({ remainSec }) => {
       setStatus('slow_down')
       if (handoffTimerRef.current) clearTimeout(handoffTimerRef.current)
@@ -855,6 +859,14 @@ export default function ChatRoom({
               remoteStreamVersion={remoteStreamVersion}
               scrollRef={msgScrollRef}
             />
+          )}
+          {isStrangerTyping && (status === 'text_chat' || status === 'connected') && (
+            <div style={{ padding: '0 16px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Stranger is typing</span>
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+            </div>
           )}
           {status === 'partner_left' && <PartnerLeftView onNext={findNext} onExit={onExit} />}
           {status === 'busy' && <SimpleStatusView title="Server is busy" desc="Too many open sockets from your network." />}
