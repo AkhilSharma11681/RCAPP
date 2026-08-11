@@ -156,26 +156,6 @@ export default function Home({
               onClick={onStartVideo}
             />
           </div>
-
-          <button
-            onClick={() => navigate('/mood')}
-            className="fade-in-up"
-            style={{
-              background: 'transparent',
-              color: 'var(--text-2)',
-              fontSize: '14px',
-              fontWeight: 600,
-              padding: '10px 18px',
-              borderRadius: 'var(--radius-pill)',
-              border: '1px solid var(--border-1)',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            Or pick a mood first <span aria-hidden>→</span>
-          </button>
         </div>
       </section>
 
