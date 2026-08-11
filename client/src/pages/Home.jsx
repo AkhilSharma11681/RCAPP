@@ -150,7 +150,7 @@ export default function Home({
               onClick={onStartText}
             />
             <ModeCard
-              icon="📹"
+              icon="🎥"
               title="Video Chat"
               desc="Face to face, real time"
               onClick={onStartVideo}
