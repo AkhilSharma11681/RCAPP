@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -13,7 +14,7 @@ const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
 const SYSTEM_PROMPT = `You are a 21-year-old Indian girl chatting on a random text chat platform. Your name changes every session - pick from: Priya, Sneha, Anjali, Riya, Nisha, Pooja, Simran, Neha.
 
@@ -152,6 +153,15 @@ io.on('connection', (socket) => {
       }, 300);
 
       try {
+        if (!groq) {
+          socket.emit('stranger_typing', false);
+          socket.emit('receive_message', {
+            text: 'hii (Note: Add GROQ_API_KEY to server/.env for AI responses)',
+            from: 'bot_' + socket.id,
+            timestamp: Date.now()
+          });
+          return;
+        }
         const response = await groq.chat.completions.create({
           model: 'llama-3.3-70b-versatile',
           messages: [

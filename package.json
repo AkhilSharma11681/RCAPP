@@ -1,0 +1,10 @@
+{
+  "name": "rcapp",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "server": "npm --prefix server start || node server/index.js",
+    "client": "npm --prefix client run dev",
+    "dev": "npx concurrently \"npm run server\" \"npm run client\""
+  }
+}
