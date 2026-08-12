@@ -557,6 +557,7 @@ export default function ChatRoom({
 
     sock.on('partner_left', () => {
       setStatus('partner_left')
+      setIsStrangerTyping(false)
       teardownWebRTC()
       if (autoNextTimerRef.current) clearTimeout(autoNextTimerRef.current)
       autoNextTimerRef.current = setTimeout(() => {
@@ -576,6 +577,7 @@ export default function ChatRoom({
     sock.on('receive_message', (data) => {
       const text = data && typeof data.text === 'string' ? data.text : ''
       if (!text) return
+      setIsStrangerTyping(false)
       setMessages((prev) => [...prev, { from: 'stranger', text, time: nowTime() }])
     })
 
@@ -691,6 +693,7 @@ export default function ChatRoom({
   const findNext = useCallback(() => {
     teardownWebRTC(false)
     setStatus('waiting')
+    setIsStrangerTyping(false)
     setMatchSeconds(0)
     setMessages([])
     remoteStreamRef.current = null
