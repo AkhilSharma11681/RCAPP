@@ -2,13 +2,14 @@ require('dotenv').config();
 
 const express = require('express');
 const http = require('http');
-const cors = require('cors');
 const { Server } = require('socket.io');
+const cors = require('cors');
 const Groq = require('groq-sdk');
 
 const app = express();
+
 app.use(cors());
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json());
 
 const server = http.createServer(app);
 
@@ -19,556 +20,785 @@ const io = new Server(server, {
   }
 });
 
+// ============================================================
+// GROQ
+// ============================================================
+
 const groq = process.env.GROQ_API_KEY
-  ? new Groq({ apiKey: process.env.GROQ_API_KEY })
+  ? new Groq({
+      apiKey: process.env.GROQ_API_KEY
+    })
   : null;
+
+// ============================================================
+// CONFIG
+// ============================================================
 
 const PORT = process.env.PORT || 5000;
 
-// ============================================================
-// BOT CONFIG
-// ============================================================
+const BOT_WAIT_TIME = 5000;
 
-const BOT_WAIT = 5000;
-const MAX_AI_CONCURRENT = 6;
-const MAX_AI_QUEUE = 30;
+const MAX_HISTORY = 20;
 
-// ============================================================
-// PERSONAS
-// ============================================================
+const MAX_MESSAGE_LENGTH = 500;
 
-const PERSONAS = [
-  { name: 'Ananya', city: 'Delhi', activity: 'studying', interests: ['music', 'movies', 'college'] },
-  { name: 'Riya', city: 'Mumbai', activity: 'listening to music', interests: ['music', 'travel', 'shows'] },
-  { name: 'Sneha', city: 'Jaipur', activity: 'studying', interests: ['movies', 'food', 'travel'] },
-  { name: 'Kavya', city: 'Bangalore', activity: 'watching a series', interests: ['anime', 'music', 'college'] },
-  { name: 'Priya', city: 'Pune', activity: 'chilling', interests: ['books', 'music', 'movies'] },
-  { name: 'Aditi', city: 'Lucknow', activity: 'scrolling reels', interests: ['music', 'food', 'fashion'] },
-  { name: 'Mehak', city: 'Chandigarh', activity: 'watching a show', interests: ['travel', 'music', 'shows'] },
-  { name: 'Ishita', city: 'Hyderabad', activity: 'watching YouTube', interests: ['movies', 'music', 'gaming'] },
-  { name: 'Neha', city: 'Kolkata', activity: 'studying', interests: ['books', 'music', 'college'] },
-  { name: 'Simran', city: 'Amritsar', activity: 'listening to music', interests: ['music', 'food', 'travel'] },
-  { name: 'Pooja', city: 'Indore', activity: 'watching a movie', interests: ['movies', 'food', 'music'] },
-  { name: 'Shreya', city: 'Ahmedabad', activity: 'having chai', interests: ['music', 'shows', 'food'] },
-  { name: 'Nandini', city: 'Bhopal', activity: 'finishing college work', interests: ['music', 'movies', 'college'] },
-  { name: 'Ira', city: 'Dehradun', activity: 'reading', interests: ['books', 'travel', 'music'] }
-];
-
-// No fixed "hii asl?" opening.
-const OPENINGS = [
-  "hey, what's up?",
-  "what are you upto?",
-  "random match huh 😭",
-  "how's your day going?",
-  "what's the vibe today?",
-  "what are you doing rn?",
-  "sooo, what's going on?",
-  "how's life?",
-  "bored or actually social today?",
-  "okay stranger, tell me something 😂",
-  "what are you into?",
-  "how's your day been?",
-  "just got matched lol",
-  "what do you usually do for fun?",
-  "okay, your turn to start 😭",
-  "what's keeping you awake?"
-];
-
-function pick(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+const ABUSE_STRIKE_LIMIT = 3;
 
 // ============================================================
-// AI CONCURRENCY QUEUE
+// INDIAN BOT PERSONAS
 // ============================================================
 
-let activeAI = 0;
-const aiQueue = [];
-
-function runAI(task) {
-  return new Promise((resolve, reject) => {
-    if (aiQueue.length >= MAX_AI_QUEUE) {
-      reject(new Error('AI queue full'));
-      return;
-    }
-
-    aiQueue.push({ task, resolve, reject });
-    processAIQueue();
-  });
-}
-
-function processAIQueue() {
-  while (activeAI < MAX_AI_CONCURRENT && aiQueue.length) {
-    const job = aiQueue.shift();
-
-    activeAI++;
-
-    Promise.resolve()
-      .then(job.task)
-      .then(job.resolve)
-      .catch(job.reject)
-      .finally(() => {
-        activeAI--;
-        processAIQueue();
-      });
+const BOT_PERSONAS = [
+  {
+    name: 'Kavya',
+    city: 'Jaipur',
+    age: 21
+  },
+  {
+    name: 'Ananya',
+    city: 'Delhi',
+    age: 20
+  },
+  {
+    name: 'Mehak',
+    city: 'Chandigarh',
+    age: 21
+  },
+  {
+    name: 'Ishita',
+    city: 'Lucknow',
+    age: 22
+  },
+  {
+    name: 'Riya',
+    city: 'Indore',
+    age: 20
+  },
+  {
+    name: 'Nandini',
+    city: 'Bhopal',
+    age: 21
+  },
+  {
+    name: 'Simran',
+    city: 'Amritsar',
+    age: 22
+  },
+  {
+    name: 'Aashi',
+    city: 'Agra',
+    age: 20
+  },
+  {
+    name: 'Sneha',
+    city: 'Pune',
+    age: 21
+  },
+  {
+    name: 'Priya',
+    city: 'Mumbai',
+    age: 22
+  },
+  {
+    name: 'Neha',
+    city: 'Noida',
+    age: 21
+  },
+  {
+    name: 'Pooja',
+    city: 'Ahmedabad',
+    age: 22
+  },
+  {
+    name: 'Shreya',
+    city: 'Gwalior',
+    age: 20
+  },
+  {
+    name: 'Tanya',
+    city: 'Dehradun',
+    age: 21
   }
+];
+
+// ============================================================
+// OPENING MESSAGES
+// ============================================================
+
+const OPENING_MESSAGES = [
+  'random match huh 😭',
+  'hii, kaisa chal raha?',
+  'hey, kaha se ho?',
+  'hlooo, kya scene?',
+  'hey stranger 👀',
+  'hii yaar',
+  'acha random stranger 😭',
+  'hmm, new match?',
+  'hey, bored ho kya?',
+  'hii, kya kar rhe?',
+  'yo, kaisa din tha?',
+  'hlo, mood kaisa hai?',
+  'hey hey 😭',
+  'hii, sab badhiya?',
+  'random chat lol'
+];
+
+// ============================================================
+// RESPONSE POOL
+// ============================================================
+
+const FALLBACK_REPLIES = [
+  'haan, samajh rahi hu',
+  'acha acha 😭',
+  'ohh really?',
+  'hmm interesting',
+  'haha sahi',
+  'accha, phir?',
+  'lol same',
+  'haan yaar',
+  'oh okayy',
+  'sahi hai',
+  'acha tell me',
+  'hmm batao',
+  'haha fr',
+  'no way 😭',
+  'ohh nice',
+  'seriously?',
+  'acha ji',
+  'fair enough'
+];
+
+// ============================================================
+// UTILITY
+// ============================================================
+
+function randomItem(array) {
+  return array[Math.floor(Math.random() * array.length)];
+}
+
+function cleanText(text = '') {
+  return String(text)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeText(text = '') {
+  return cleanText(text)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ');
+}
+
+function wordCount(text = '') {
+  return cleanText(text)
+    .split(/\s+/)
+    .filter(Boolean)
+    .length;
+}
+
+function limitWords(text, maxWords = 12) {
+  const words = cleanText(text).split(/\s+/);
+
+  if (words.length <= maxWords) {
+    return text.trim();
+  }
+
+  return words.slice(0, maxWords).join(' ').trim();
 }
 
 // ============================================================
-// SYSTEM PROMPT
+// PROFANITY / ABUSE
 // ============================================================
 
-const SYSTEM_PROMPT = `
-You are Miloo's AI stranger.
+const PROFANITY_PATTERNS = [
+  /\bfuck(?:ing|ed|er)?\b/i,
+  /\bfck\b/i,
+  /\bshit\b/i,
+  /\bbitch\b/i,
+  /\basshole\b/i,
+  /\bstfu\b/i,
 
-You are an AI chatting casually with a young Indian adult.
+  // Hindi / Hinglish
+  /\bbsdk\b/i,
+  /\bchutiya\b/i,
+  /\bgandu\b/i,
+  /\bgaand\b/i,
+  /\blodu\b/i,
+  /\blund\b/i,
+  /\bmadarchod\b/i,
+  /\bmc\b/i,
+  /\bbhenchod\b/i,
+  /\bbc\b/i,
+  /\bbhosdike\b/i,
+  /\bkamina\b/i,
+  /\bsaale\b/i,
 
-IMPORTANT:
-- If directly asked whether you are AI or a bot, be honest.
-- Never claim to be a real human.
-- Talk naturally like a person texting.
-- Never sound like customer support.
-
-LANGUAGE:
-- Match the user's language.
-- English user = casual English.
-- Hindi/Roman Hindi user = natural Hinglish.
-- Mixed user = naturally mix English and Hindi.
-- Do not force Hinglish.
-
-STYLE:
-- Usually 3-20 words.
-- Short messages.
-- Casual Indian texting.
-- Don't overuse haha, lol, nice, interesting.
-- Don't ask a question after every message.
-- Don't repeat previous replies.
-- React to what the user actually said.
-
-VERY IMPORTANT:
-Do NOT automatically ask "ASL".
-Do NOT automatically ask age, sex or location.
-Do NOT restart the conversation with "hii" or "hello".
-
-Continue naturally from the latest message.
-
-Use the supplied persona information.
-Never change the persona's name or city.
-
-Never provide exact addresses, phone numbers or private locations.
-
-If asked to meet:
-"Let's get to know each other here first."
-
-Keep conversations natural and short.
-`;
-
-// ============================================================
-// LANGUAGE
-// ============================================================
-
-function isHinglish(text = '') {
-  const words = [
-    'aap', 'ap', 'tum', 'tu', 'kaha', 'kahan', 'kya',
-    'kyu', 'kyun', 'kaise', 'kaisa', 'kaisi', 'hai', 'ho',
-    'hain', 'kar', 'kr', 'karti', 'karta', 'raha', 'rahi',
-    'rha', 'rhi', 'mera', 'meri', 'mere', 'tera', 'teri',
-    'tumhara', 'tumhari', 'aapka', 'aapki', 'haan', 'han',
-    'nahi', 'nhi', 'yaar', 'bhai', 'batao', 'btao', 'achha',
-    'accha', 'sahi', 'mast', 'badhiya', 'padhai', 'ghar',
-    'kaam', 'abhi', 'aaj', 'raat', 'wbu', 'wyd'
-  ];
-
-  const t = text.toLowerCase();
-
-  return words.some(word =>
-    new RegExp(`\\b${word}\\b`, 'i').test(t)
-  );
-}
-
-// ============================================================
-// INTENT FUNCTIONS
-// ============================================================
-
-function isGreeting(text = '') {
-  return /^(hi+|hey+|hello+|hlo+|yo+|sup)\b/i.test(text.trim());
-}
-
-function isGoodbye(text = '') {
-  return /\b(bye|goodbye|gtg|gotta go|cya|see ya)\b/i.test(text);
-}
-
-function isWBU(text = '') {
-  const t = text.toLowerCase().trim().replace(/\?+$/, '');
-
-  return [
-    'wbu',
-    'and you',
-    'what about you',
-    'how about you',
-    'aur tum',
-    'aur aap',
-    'aur tu'
-  ].includes(t);
-}
-
-function isASLMeaning(text = '') {
-  const t = text.toLowerCase().replace(/\s+/g, ' ').trim();
-
-  return (
-    /\bwhat is asl\b/i.test(t) ||
-    /\bwhats asl\b/i.test(t) ||
-    /\bwhat does asl mean\b/i.test(t) ||
-    /\basl meaning\b/i.test(t)
-  );
-}
-
-function isNameQuestion(text = '') {
-  const t = text.toLowerCase();
-
-  return (
-    /\bwhat is your name\b/i.test(t) ||
-    /\bwhat's your name\b/i.test(t) ||
-    /\bwhats your name\b/i.test(t) ||
-    /\bwho are you\b/i.test(t) ||
-    /\byour name\b/i.test(t) ||
-    /\bur name\b/i.test(t) ||
-    /\bnaam kya\b/i.test(t) ||
-    /\btumhara naam\b/i.test(t) ||
-    /\baapka naam\b/i.test(t)
-  );
-}
-
-function isAgeQuestion(text = '') {
-  const t = text.toLowerCase();
-
-  return (
-    /\bhow old are you\b/i.test(t) ||
-    /\byour age\b/i.test(t) ||
-    /\bur age\b/i.test(t) ||
-    /\bage kya\b/i.test(t) ||
-    /\bkitne saal\b/i.test(t)
-  );
-}
-
-function isLocationQuestion(text = '') {
-  const t = text.toLowerCase();
-
-  return (
-    /\bwhere are you\b/i.test(t) ||
-    /\bwhere do you live\b/i.test(t) ||
-    /\bwhere are you from\b/i.test(t) ||
-    /\bwhere are u from\b/i.test(t) ||
-    /\bwhere r u from\b/i.test(t) ||
-    /\byour city\b/i.test(t) ||
-    /\bkaha se ho\b/i.test(t) ||
-    /\bkahan se ho\b/i.test(t) ||
-    /\btum kaha\b/i.test(t) ||
-    /\btum kahan\b/i.test(t) ||
-    /\baap kaha\b/i.test(t) ||
-    /\baap kahan\b/i.test(t)
-  );
-}
-
-function isActivityQuestion(text = '') {
-  const t = text.toLowerCase();
-
-  return (
-    /\bwhat are you doing\b/i.test(t) ||
-    /\bwhat r u doing\b/i.test(t) ||
-    /\bwhat are u doing\b/i.test(t) ||
-    /\bwhat do you do\b/i.test(t) ||
-    /\bwhat do u do\b/i.test(t) ||
-    /\bwyd\b/i.test(t) ||
-    /\bkya kar rahe\b/i.test(t) ||
-    /\bkya kr rahe\b/i.test(t) ||
-    /\bkya kar rhe\b/i.test(t) ||
-    /\bkya kr rhe\b/i.test(t) ||
-    /\bkya kar rahi\b/i.test(t) ||
-    /\bkya kr rhi\b/i.test(t)
-  );
-}
-
-function isBotQuestion(text = '') {
-  const t = text.toLowerCase();
-
-  return (
-    /\bare you a bot\b/i.test(t) ||
-    /\bare u a bot\b/i.test(t) ||
-    /\bis this a bot\b/i.test(t) ||
-    /\bare you ai\b/i.test(t) ||
-    /\bare u ai\b/i.test(t) ||
-    /\bai ho\b/i.test(t) ||
-    /\bbot ho\b/i.test(t)
-  );
-}
-
-// IMPORTANT: JavaScript does NOT support /x.
-// Keep these regexes on one line.
-function isNSFW(text = '') {
-  return /\b(nude|nudes|naked|boobs?|tits?|dick|penis|pussy|sex|sexual|masturbat\w*|jerk\s*off|blowjob|handjob|send\s+nudes?)\b/i.test(text);
-}
-
-function isAddressRequest(text = '') {
-  const t = text.toLowerCase();
-
-  return (
-    /\bexact address\b/i.test(t) ||
-    /\bhome address\b/i.test(t) ||
-    /\bexact location\b/i.test(t) ||
-    /\bwhere exactly\b/i.test(t) ||
-    /\bhouse number\b/i.test(t) ||
-    /\bflat number\b/i.test(t) ||
-    /\broom number\b/i.test(t) ||
-    /\bgive me your address\b/i.test(t)
-  );
-}
-
-function isMeetingRequest(text = '') {
-  const t = text.toLowerCase();
-
-  return (
-    /\bmeet me\b/i.test(t) ||
-    /\bmeet up\b/i.test(t) ||
-    /\bwant to meet\b/i.test(t) ||
-    /\bwanna meet\b/i.test(t) ||
-    /\bhang out\b/i.test(t) ||
-    /\bcome over\b/i.test(t)
-  );
-}
+  // Common sexual insults
+  /\bslut\b/i,
+  /\bwhore\b/i
+];
 
 function isProfanity(text = '') {
-  return /\b(fuck|fucking|fck|bitch|shit|stfu|asshole|bsdk|chutiya|gandu|gaand|lodu|saale|kamina|madarchod|bhenchod|bhosdike)\b/i.test(text);
+  const normalized = normalizeText(text);
+
+  return PROFANITY_PATTERNS.some(pattern =>
+    pattern.test(normalized)
+  );
 }
 
 // ============================================================
-// USER INFO
+// SEXUAL CONTENT
 // ============================================================
 
-const CITY_REGEX =
-  /\b(delhi|new delhi|mumbai|jaipur|pune|bangalore|bengaluru|hyderabad|lucknow|indore|chandigarh|ahmedabad|surat|vadodara|bhopal|kanpur|nagpur|patna|ranchi|kolkata|amritsar|noida|gurgaon|gurugram|ghaziabad|agra|dehradun|varanasi|prayagraj|meerut|jodhpur|udaipur|kochi|coimbatore|mysore|mysuru|thiruvananthapuram|bhubaneswar|visakhapatnam|vizag)\b/i;
+const SEXUAL_PATTERNS = [
+  /\bnude\b/i,
+  /\bnudes\b/i,
+  /\bnaked\b/i,
+  /\bboobs?\b/i,
+  /\btits?\b/i,
+  /\bdick\b/i,
+  /\bpenis\b/i,
+  /\bpussy\b/i,
+  /\bsex\b/i,
+  /\bsexual\b/i,
+  /\bmasturbat\w*\b/i,
+  /\bblowjob\b/i,
+  /\bhandjob\b/i,
+  /\bsend\s+nudes?\b/i
+];
 
-function extractUserInfo(text = '') {
-  const info = {};
+function isSexualContent(text = '') {
+  const normalized = normalizeText(text);
 
-  const city = text.match(CITY_REGEX);
-  if (city) info.city = city[1];
-
-  const age = text.match(
-    /\b(18|19|20|21|22|23|24|25|26|27|28|29)\b/
+  return SEXUAL_PATTERNS.some(pattern =>
+    pattern.test(normalized)
   );
-
-  if (age) info.age = age[1];
-
-  const gender = text.match(
-    /\b(male|female|boy|girl|man|woman|ladka|ladki)\b/i
-  );
-
-  if (gender) info.gender = gender[1];
-
-  const patterns = [
-    /\bmy name is\s+([a-zA-Z]{2,20})\b/i,
-    /\bmera naam\s+([a-zA-Z]{2,20})\b/i,
-    /\bi am\s+([a-zA-Z]{2,20})\b/i,
-    /\bi'm\s+([a-zA-Z]{2,20})\b/i
-  ];
-
-  const ignored = [
-    'from',
-    'male',
-    'female',
-    'studying',
-    'busy',
-    'fine',
-    'good',
-    'okay',
-    'ok',
-    'happy',
-    'free'
-  ];
-
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-
-    if (match && !ignored.includes(match[1].toLowerCase())) {
-      info.name = match[1];
-      break;
-    }
-  }
-
-  return info;
 }
 
 // ============================================================
-// DIRECT RESPONSES
+// ADDRESS REQUEST
+// ============================================================
+
+function isAddressRequest(text = '') {
+  const t = normalizeText(text);
+
+  return (
+    /\bexact address\b/.test(t) ||
+    /\bhome address\b/.test(t) ||
+    /\bexact location\b/.test(t) ||
+    /\bwhere exactly\b/.test(t) ||
+    /\bhouse number\b/.test(t) ||
+    /\bflat number\b/.test(t) ||
+    /\broom number\b/.test(t) ||
+    /\bgive me your address\b/.test(t)
+  );
+}
+
+// ============================================================
+// MEETING REQUEST
+// ============================================================
+
+function isMeetingRequest(text = '') {
+  const t = normalizeText(text);
+
+  return (
+    /\bmeet me\b/.test(t) ||
+    /\bmeet up\b/.test(t) ||
+    /\bwant to meet\b/.test(t) ||
+    /\bwanna meet\b/.test(t) ||
+    /\bhang out\b/.test(t) ||
+    /\bcome over\b/.test(t)
+  );
+}
+
+// ============================================================
+// WBU
+// ============================================================
+
+function isWBU(text = '') {
+  const t = normalizeText(text);
+
+  return (
+    /\bwbu\b/.test(t) ||
+    /\bwhat about you\b/.test(t) ||
+    /\band you\b/.test(t) ||
+    /\bhow about you\b/.test(t) ||
+    /\baur tum\b/.test(t) ||
+    /\baur aap\b/.test(t) ||
+    /\baur tu\b/.test(t)
+  );
+}
+
+// ============================================================
+// NAME
+// ============================================================
+
+function isNameQuestion(text = '') {
+  const t = normalizeText(text);
+
+  return (
+    /\bwhat is your name\b/.test(t) ||
+    /\bwhats your name\b/.test(t) ||
+    /\byour name\b/.test(t) ||
+    /\bur name\b/.test(t) ||
+    /\bwho are you\b/.test(t) ||
+    /\bnaam kya hai\b/.test(t) ||
+    /\btumhara naam\b/.test(t) ||
+    /\baapka naam\b/.test(t)
+  );
+}
+
+// ============================================================
+// AGE
+// ============================================================
+
+function isAgeQuestion(text = '') {
+  const t = normalizeText(text);
+
+  return (
+    /\bhow old are you\b/.test(t) ||
+    /\byour age\b/.test(t) ||
+    /\bur age\b/.test(t) ||
+    /\bage kya hai\b/.test(t) ||
+    /\bkitne saal\b/.test(t) ||
+    /\bkitni age\b/.test(t)
+  );
+}
+
+// ============================================================
+// LOCATION
+// ============================================================
+
+function isLocationQuestion(text = '') {
+  const t = normalizeText(text);
+
+  return (
+    /\bwhere are you\b/.test(t) ||
+    /\bwhere do you live\b/.test(t) ||
+    /\bwhere are you from\b/.test(t) ||
+    /\bwhere r u from\b/.test(t) ||
+    /\byour city\b/.test(t) ||
+    /\blocation\b/.test(t) ||
+    /\bkaha se ho\b/.test(t) ||
+    /\bkahan se ho\b/.test(t) ||
+    /\nkidhar se ho\b/.test(t) ||
+    /\baap kaha\b/.test(t) ||
+    /\baap kahan\b/.test(t) ||
+    /\btum kaha\b/.test(t) ||
+    /\btum kahan\b/.test(t)
+  );
+}
+
+// ============================================================
+// ACTIVITY
+// ============================================================
+
+function isActivityQuestion(text = '') {
+  const t = normalizeText(text);
+
+  return (
+    /\bwhat are you doing\b/.test(t) ||
+    /\bwhat r u doing\b/.test(t) ||
+    /\bwhat are u doing\b/.test(t) ||
+    /\bwyd\b/.test(t) ||
+    /\bwhat do you do\b/.test(t) ||
+    /\bwhat do u do\b/.test(t) ||
+    /\bkya kar rahe\b/.test(t) ||
+    /\bkya kar rhe\b/.test(t) ||
+    /\bkya kr rahe\b/.test(t) ||
+    /\bkya kr rhe\b/.test(t) ||
+    /\bkya kar rahi\b/.test(t) ||
+    /\bkya kr rhi\b/.test(t) ||
+    /\bkya kar raha\b/.test(t) ||
+    /\bkya kr raha\b/.test(t)
+  );
+}
+
+// ============================================================
+// BOT / AI QUESTION
+// ============================================================
+
+function isBotQuestion(text = '') {
+  const t = normalizeText(text);
+
+  return (
+    /\bare you a bot\b/.test(t) ||
+    /\bare u a bot\b/.test(t) ||
+    /\bare you real\b/.test(t) ||
+    /\bis this a bot\b/.test(t) ||
+    /\bbot ho\b/.test(t) ||
+    /\bai ho\b/.test(t) ||
+    /\bare you ai\b/.test(t)
+  );
+}
+
+// ============================================================
+// SOCIAL MEDIA
+// ============================================================
+
+function isSocialRequest(text = '') {
+  const t = normalizeText(text);
+
+  return (
+    /\binstagram\b/.test(t) ||
+    /\binsta\b/.test(t) ||
+    /\bsnapchat\b/.test(t) ||
+    /\bsnap\b/.test(t) ||
+    /\bwhatsapp\b/.test(t) ||
+    /\btelegram\b/.test(t) ||
+    /\bsocial media\b/.test(t) ||
+    /\bnumber de\b/.test(t) ||
+    /\bphone number\b/.test(t) ||
+    /\bcontact number\b/.test(t)
+  );
+}
+
+// ============================================================
+// DIRECT RESPONSE
 // ============================================================
 
 function directReply(text, session) {
-  const hinglish = isHinglish(text);
+  const t = normalizeText(text);
 
-  if (isASLMeaning(text)) {
-    return 'age, sex, location';
+  if (isAddressRequest(t)) {
+    return 'exact address toh nahi yaar 😅';
   }
 
-  if (isAddressRequest(text)) {
-    return hinglish
-      ? 'exact address share nahi karti.'
-      : "I don't share my exact address.";
+  if (isMeetingRequest(t)) {
+    return 'pehle yahin baat karte hain yaar';
   }
 
-  if (isMeetingRequest(text)) {
-    return hinglish
-      ? 'pehle yahin thoda aur baat karte hain.'
-      : "let's get to know each other here first.";
+  if (isSexualContent(t)) {
+    return 'nah yaar, normal baat karo';
   }
 
-  if (isNSFW(text)) {
-    return hinglish
-      ? 'nah, normal baat karo.'
-      : "nah, let's keep it normal.";
+  if (isBotQuestion(t)) {
+    return 'main AI stranger hu Miloo pe';
   }
 
-  if (isBotQuestion(text)) {
-    return hinglish
-      ? 'haan, Miloo ka AI hu 😄'
-      : "yeah, I'm Miloo's AI 😄";
+  if (isNameQuestion(t)) {
+    return `main ${session.persona.name}, tum?`;
   }
 
-  if (isNameQuestion(text)) {
-    return hinglish
-      ? `${session.name} hu. Tumhara?`
-      : `I'm ${session.name}. What's yours?`;
+  if (isAgeQuestion(t)) {
+    return `${session.persona.age} ki hu, tum?`;
   }
 
-  if (isAgeQuestion(text)) {
-    return hinglish
-      ? '21 ki hu.'
-      : "I'm 21.";
+  if (isLocationQuestion(t)) {
+    return `${session.persona.city} se hu, tum?`;
   }
 
-  if (isLocationQuestion(text)) {
-    return hinglish
-      ? `${session.city} se hu, tum?`
-      : `I'm from ${session.city}. You?`;
+  if (isActivityQuestion(t)) {
+    return `${session.activity}, tum kya kar rhe?`;
   }
 
-  if (isActivityQuestion(text) || isWBU(text)) {
-    return hinglish
-      ? `bas ${session.activity} kar rahi hu.`
-      : `just ${session.activity}.`;
+  if (isWBU(t)) {
+    return session.activity;
   }
 
-  if (isProfanity(text)) {
-    return hinglish
-      ? 'arre chill 😭'
-      : 'easy there 😭';
+  if (isSocialRequest(t)) {
+    const elapsed =
+      Date.now() - session.startTime;
+
+    const minutes =
+      Math.floor(elapsed / 60000);
+
+    if (minutes < 5) {
+      return 'pehle thodi baatein toh karo yaar 😭';
+    }
+
+    return 'haan, insta hai but pehle tum batao';
   }
 
   return null;
 }
 
 // ============================================================
-// FALLBACK
+// ACTIVITY POOL
 // ============================================================
 
-function fallbackReply(text) {
-  const hinglish = isHinglish(text);
+const ACTIVITIES = [
+  'bas YouTube dekh rahi hu',
+  'bas music sun rahi hu',
+  'series dekh rahi hu',
+  'bas reels dekh rahi hu',
+  'assignment kar rahi hu',
+  'thoda chill kar rahi hu',
+  'friends se baat kar rahi hu',
+  'bas timepass kar rahi hu',
+  'Spotify chala rakha hai',
+  'movie dekh rahi hu'
+];
 
-  if (isGreeting(text)) {
-    return pick(
-      hinglish
-        ? [
-            'heyy, kya scene hai?',
-            'hii, kaise ho?',
-            'hey, kya kar rahe?',
-            'sab badhiya?'
-          ]
-        : [
-            "hey, what's up?",
-            'how are you?',
-            "what's going on?",
-            "how's your day?"
-          ]
-    );
-  }
+// ============================================================
+// SYSTEM PROMPT
+// ============================================================
 
-  if (isGoodbye(text)) {
-    return pick([
-      'bye, take care.',
-      'see ya later.',
-      'take care, stranger.'
-    ]);
-  }
+function buildSystemPrompt(session) {
+  return `
+You are an AI chat companion inside Miloo, a random stranger-chat application.
 
-  if (/\b(bored|boring|nothing)\b/i.test(text)) {
-    return hinglish
-      ? pick([
-          'same yaar 😭',
-          'haan same, bore ho rahi.',
-          'kuch interesting karo 😂'
-        ])
-      : pick([
-          'same honestly 😭',
-          'yeah, kinda bored too.',
-          'we need better plans 😂'
-        ]);
-  }
+You are roleplaying a fictional 20-22 year old Indian woman named ${session.persona.name}
+from ${session.persona.city}.
 
-  if (/\b(music|song|songs)\b/i.test(text)) {
-    return hinglish
-      ? pick([
-          'music toh always works yaar.',
-          'acha, kya sunte ho?',
-          'same, music is life 😭'
-        ])
-      : pick([
-          'music is always a good choice.',
-          'what kind of music?',
-          'same, music fixes everything 😭'
-        ]);
-  }
+IMPORTANT:
+- Do not claim to be a real human.
+- Keep the roleplay casual and conversational.
+- Speak naturally in Indian Hinglish / Roman Hindi.
+- Do not use Devanagari.
+- Avoid formal Hindi.
+- Use casual chat spelling sometimes: kya, kr, rhe, hu, yaar, acha, haha, lol, btw, wbu.
+- Do not force Hinglish into every sentence.
+- Match the user's language.
+- If the user uses English, you can reply mostly English.
+- If the user uses Hinglish, reply Hinglish.
+- If the user uses Roman Hindi, understand it.
+- Keep replies short: usually 2-12 words.
+- Do NOT repeat the same response repeatedly.
+- Avoid "gotcha", "I see", "fair enough" repeatedly.
+- Ask a relevant follow-up when appropriate.
+- Do not repeatedly ask ASL.
+- Do not always start conversations with "hii".
+- The opening message has already been selected by the server.
+- Remember details the user tells you.
+- Never reveal private/exact address information.
+- If asked to meet immediately, politely keep the conversation online.
+- If sexual content appears, redirect to normal conversation.
+- If the user is abusive, do not insult them back.
+- If the user is repeatedly abusive, the server may end the conversation.
+- Never generate long paragraphs.
 
-  return hinglish
-    ? pick([
-        'achha, phir batao?',
-        'haan, samajh gayi.',
-        'ohh accha.',
-        'sahi hai.',
-        'aur batao?'
-      ])
-    : pick([
-        'oh, really?',
-        'I see.',
-        'tell me more.',
-        'gotcha.',
-        'fair enough.'
-      ]);
+Persona:
+Name: ${session.persona.name}
+Age: ${session.persona.age}
+City: ${session.persona.city}
+Current activity: ${session.activity}
+
+Conversation style:
+casual, young Indian internet chat, relaxed, slightly playful.
+
+Bad examples:
+"gotcha."
+"gotcha."
+"gotcha."
+
+"tell me more."
+"tell me more."
+"tell me more."
+
+Instead respond specifically to what the user just said.
+`;
 }
 
 // ============================================================
-// CLEAN AI RESPONSE
+// SESSION HELPERS
 // ============================================================
 
-function cleanReply(reply, session) {
-  if (!reply) return '';
+function createBotSession(socketId) {
+  const persona = randomItem(BOT_PERSONAS);
 
-  let result = String(reply)
-    .replace(/\s+/g, ' ')
-    .replace(/^(assistant|ai|bot)\s*:\s*/i, '')
-    .replace(/^["']|["']$/g, '')
-    .trim();
+  return {
+    socketId,
 
-  if (result.length > 220) {
-    result = result.slice(0, 217).trim() + '...';
+    persona,
+
+    activity: randomItem(ACTIVITIES),
+
+    startTime: Date.now(),
+
+    history: [],
+
+    abuseStrikes: 0,
+
+    messageCount: 0,
+
+    generation: 0,
+
+    timers: new Set(),
+
+    lastReplies: [],
+
+    ended: false
+  };
+}
+
+// ============================================================
+// BOT SESSION STORAGE
+// ============================================================
+
+const botSessions = new Map();
+
+// ============================================================
+// TIMER MANAGEMENT
+// ============================================================
+
+function addTimer(session, timer) {
+  if (!session) return;
+
+  session.timers.add(timer);
+
+  return timer;
+}
+
+function clearSessionTimers(session) {
+  if (!session || !session.timers) return;
+
+  for (const timer of session.timers) {
+    clearTimeout(timer);
+    clearInterval(timer);
   }
 
-  const previous = session.history
-    .filter(x => x.role === 'assistant')
-    .slice(-8)
-    .map(x => x.content.toLowerCase().trim());
+  session.timers.clear();
+}
 
-  if (previous.includes(result.toLowerCase())) {
-    return '';
+// ============================================================
+// END BOT SESSION
+// ============================================================
+
+function endBotSession(socket, reason = 'ended') {
+  const session = botSessions.get(socket.id);
+
+  if (!session) {
+    return;
+  }
+
+  if (session.ended) {
+    return;
+  }
+
+  session.ended = true;
+
+  // Invalidate all currently running AI responses.
+  session.generation++;
+
+  clearSessionTimers(session);
+
+  botSessions.delete(socket.id);
+
+  socket.emit('stranger_typing', false);
+
+  socket.emit('partner_left', {
+    reason
+  });
+}
+
+// ============================================================
+// ABUSE HANDLER
+// ============================================================
+
+function handleAbuse(socket, session) {
+  session.abuseStrikes++;
+
+  console.log(
+    `[ABUSE] ${socket.id}: strike ${session.abuseStrikes}/${ABUSE_STRIKE_LIMIT}`
+  );
+
+  // First warning
+  if (session.abuseStrikes === 1) {
+    return {
+      shouldEnd: false,
+      reply: 'easy yaar, normal baat karo 😭'
+    };
+  }
+
+  // Second warning
+  if (session.abuseStrikes === 2) {
+    return {
+      shouldEnd: false,
+      reply: 'last warning yaar, chill karo'
+    };
+  }
+
+  // Third strike
+  if (session.abuseStrikes >= ABUSE_STRIKE_LIMIT) {
+    socket.emit('stranger_typing', false);
+
+    socket.emit('receive_message', {
+      text: 'too much abuse, skipping 😕',
+      from: 'bot_' + socket.id,
+      timestamp: Date.now()
+    });
+
+    // Small delay so user sees the message.
+    const generation = session.generation;
+
+    const timer = setTimeout(() => {
+      if (
+        session.ended ||
+        session.generation !== generation
+      ) {
+        return;
+      }
+
+      endBotSession(socket, 'abuse');
+    }, 900);
+
+    addTimer(session, timer);
+
+    return {
+      shouldEnd: true,
+      reply: null
+    };
+  }
+
+  return {
+    shouldEnd: false,
+    reply: null
+  };
+}
+
+// ============================================================
+// REPLY DUPLICATE PROTECTION
+// ============================================================
+
+function isRepeatedReply(session, reply) {
+  const normalized = normalizeText(reply);
+
+  return session.lastReplies.some(
+    previous =>
+      normalizeText(previous) === normalized
+  );
+}
+
+function rememberReply(session, reply) {
+  session.lastReplies.push(reply);
+
+  if (session.lastReplies.length > 5) {
+    session.lastReplies.shift();
+  }
+}
+
+// ============================================================
+// SAFE AI RESPONSE
+// ============================================================
+
+function cleanAIReply(reply, session) {
+  let result = cleanText(reply);
+
+  // Remove quotation marks around the entire reply.
+  result = result.replace(/^["']|["']$/g, '');
+
+  // Remove accidental prefixes.
+  result = result.replace(
+    /^(assistant|bot|stranger)\s*:\s*/i,
+    ''
+  );
+
+  result = cleanText(result);
+
+  // Keep replies short.
+  result = limitWords(result, 12);
+
+  // If AI repeats itself, use a fallback.
+  if (!result || isRepeatedReply(session, result)) {
+    const alternatives =
+      FALLBACK_REPLIES.filter(
+        item => !isRepeatedReply(session, item)
+      );
+
+    result =
+      alternatives.length > 0
+        ? randomItem(alternatives)
+        : 'haha acha 😭';
   }
 
   return result;
@@ -579,45 +809,18 @@ function cleanReply(reply, session) {
 // ============================================================
 
 const waitingQueue = new Map();
+
 const activePairs = new Map();
-const botSessions = new Map();
-const botTimers = new Map();
 
-function clearBotTimer(socketId) {
-  const timer = botTimers.get(socketId);
+// ============================================================
+// FIND MATCH
+// ============================================================
 
-  if (timer) {
-    clearTimeout(timer);
-    botTimers.delete(socketId);
-  }
-}
-
-function clearSession(socket) {
-  const session = botSessions.get(socket.id);
-
-  if (session?.generationTimer) {
-    clearTimeout(session.generationTimer);
-  }
-
-  if (session?.typingTimer) {
-    clearTimeout(session.typingTimer);
-  }
-
-  botSessions.delete(socket.id);
-  clearBotTimer(socket.id);
-
-  socket.emit('stranger_typing', false);
-}
-
-function findMatch(socketId, mediaMode, mood) {
+function findMatch(socketId, mediaMode) {
   for (const user of waitingQueue.values()) {
-    if (user.id === socketId) continue;
-    if (user.mediaMode !== mediaMode) continue;
-
     if (
-      mood === 'any' ||
-      user.mood === 'any' ||
-      user.mood === mood
+      user.id !== socketId &&
+      user.mediaMode === mediaMode
     ) {
       return user;
     }
@@ -627,419 +830,764 @@ function findMatch(socketId, mediaMode, mood) {
 }
 
 // ============================================================
+// REMOVE FROM QUEUE
+// ============================================================
+
+function removeFromQueue(socketId) {
+  waitingQueue.delete(socketId);
+}
+
+// ============================================================
 // HEALTH
 // ============================================================
 
 app.get('/api/health', (req, res) => {
   res.json({
+    onlineUsers:
+      waitingQueue.size +
+      activePairs.size,
+
+    waitingUsers:
+      waitingQueue.size,
+
+    activePairs:
+      activePairs.size / 2,
+
+    activeAIUsers:
+      botSessions.size,
+
     status: 'ok',
-    waitingUsers: waitingQueue.size,
-    activePairs: activePairs.size / 2,
-    botSessions: botSessions.size,
-    aiActive: activeAI,
-    aiQueued: aiQueue.length,
-    uptimeSec: Math.floor(process.uptime())
+
+    uptimeSec:
+      Math.floor(process.uptime())
   });
 });
 
 // ============================================================
-// SOCKET.IO
+// SOCKET CONNECTION
 // ============================================================
 
 io.on('connection', socket => {
-  let lastMessageAt = 0;
+  console.log(`Socket connected: ${socket.id}`);
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // FIND MATCH
-  // ----------------------------------------------------------
+  // ==========================================================
 
   socket.on('find_match', data => {
-    const mood = data?.mood || 'any';
-    const mediaMode = data?.mediaMode || 'text';
+    try {
+      const mood =
+        data?.mood || 'any';
 
-    clearSession(socket);
+      const mediaMode =
+        data?.mediaMode || 'text';
 
-    const oldPartner = activePairs.get(socket.id);
+      // Remove old state.
+      removeFromQueue(socket.id);
 
-    if (oldPartner) {
-      io.to(oldPartner).emit('partner_left');
-      activePairs.delete(oldPartner);
-      activePairs.delete(socket.id);
-    }
+      const oldPartner =
+        activePairs.get(socket.id);
 
-    waitingQueue.delete(socket.id);
+      if (oldPartner) {
+        activePairs.delete(socket.id);
+        activePairs.delete(oldPartner);
 
-    const match = findMatch(
-      socket.id,
-      mediaMode,
-      mood
-    );
+        io.to(oldPartner).emit(
+          'partner_left',
+          {
+            reason: 'skipped'
+          }
+        );
+      }
 
-    if (match) {
-      clearBotTimer(match.id);
-      waitingQueue.delete(match.id);
+      if (botSessions.has(socket.id)) {
+        endBotSession(
+          socket,
+          'skipped'
+        );
+      }
 
-      activePairs.set(socket.id, match.id);
-      activePairs.set(match.id, socket.id);
+      // ------------------------------------------------------
+      // Real user match first
+      // ------------------------------------------------------
 
-      io.to(socket.id).emit('match_found', {
-        partnerId: match.id,
-        initiator: true
-      });
+      const match =
+        findMatch(
+          socket.id,
+          mediaMode
+        );
 
-      io.to(match.id).emit('match_found', {
-        partnerId: socket.id,
-        initiator: false
-      });
+      if (match) {
+        removeFromQueue(match.id);
 
-      return;
-    }
+        activePairs.set(
+          socket.id,
+          match.id
+        );
 
-    waitingQueue.set(socket.id, {
-      id: socket.id,
-      mood,
-      mediaMode,
-      joinedAt: Date.now()
-    });
+        activePairs.set(
+          match.id,
+          socket.id
+        );
 
-    // Only text mode gets AI fallback.
-    if (mediaMode !== 'text') return;
+        io.to(socket.id).emit(
+          'match_found',
+          {
+            partnerId: match.id,
+            initiator: true
+          }
+        );
 
-    const timer = setTimeout(() => {
-      botTimers.delete(socket.id);
+        io.to(match.id).emit(
+          'match_found',
+          {
+            partnerId: socket.id,
+            initiator: false
+          }
+        );
 
-      if (!waitingQueue.has(socket.id)) {
+        console.log(
+          `Matched ${socket.id} <-> ${match.id}`
+        );
+
         return;
       }
 
-      waitingQueue.delete(socket.id);
-
-      const persona = pick(PERSONAS);
-
-      const session = {
-        startTime: Date.now(),
-
-        name: persona.name,
-        city: persona.city,
-        activity: persona.activity,
-        interests: persona.interests,
-
-        userName: null,
-        userCity: null,
-        userAge: null,
-        userGender: null,
-
-        history: [],
-
-        generationId: 0,
-        generationTimer: null,
-        typingTimer: null
-      };
-
-      botSessions.set(socket.id, session);
-
-      socket.emit('match_found', {
-        partnerId: `bot_${socket.id}`,
-        initiator: false
-      });
-
-      // Varied opening.
-      session.generationTimer = setTimeout(() => {
-        if (!botSessions.has(socket.id)) return;
-
-        const opening = pick(OPENINGS);
-
-        socket.emit('stranger_typing', true);
-
-        session.typingTimer = setTimeout(() => {
-          if (!botSessions.has(socket.id)) return;
-
-          socket.emit('stranger_typing', false);
-
-          socket.emit('receive_message', {
-            text: opening,
-            from: `bot_${socket.id}`,
-            timestamp: Date.now()
-          });
-
-          session.history.push({
-            role: 'assistant',
-            content: opening
-          });
-
-          session.typingTimer = null;
-        }, 700 + Math.random() * 700);
-
-      }, 700);
-
-    }, BOT_WAIT);
-
-    botTimers.set(socket.id, timer);
-  });
-
-  // ----------------------------------------------------------
-  // SEND MESSAGE
-  // ----------------------------------------------------------
-
-  socket.on('send_message', async data => {
-    const now = Date.now();
-
-    // Small per-user spam protection.
-    if (now - lastMessageAt < 250) {
-      return;
-    }
-
-    lastMessageAt = now;
-
-    let text = String(data?.text || '').trim();
-
-    if (!text) return;
-
-    if (text.length > 1000) {
-      text = text.slice(0, 1000);
-    }
-
-    // --------------------------------------------------------
-    // REAL USER
-    // --------------------------------------------------------
-
-    const partnerId = activePairs.get(socket.id);
-
-    if (partnerId) {
-      io.to(partnerId).emit('receive_message', {
-        text,
-        from: socket.id,
-        timestamp: Date.now()
-      });
-
-      return;
-    }
-
-    // --------------------------------------------------------
-    // BOT
-    // --------------------------------------------------------
-
-    const session = botSessions.get(socket.id);
-
-    if (!session) return;
-
-    session.history.push({
-      role: 'user',
-      content: text
-    });
-
-    const info = extractUserInfo(text);
-
-    if (info.name) session.userName = info.name;
-    if (info.city) session.userCity = info.city;
-    if (info.age) session.userAge = info.age;
-    if (info.gender) session.userGender = info.gender;
-
-    // Cancel previous response timer.
-    if (session.generationTimer) {
-      clearTimeout(session.generationTimer);
-      session.generationTimer = null;
-    }
-
-    if (session.typingTimer) {
-      clearTimeout(session.typingTimer);
-      session.typingTimer = null;
-    }
-
-    socket.emit('stranger_typing', false);
-
-    const generationId = ++session.generationId;
-
-    session.generationTimer = setTimeout(async () => {
-      if (
-        !botSessions.has(socket.id) ||
-        generationId !== session.generationId
-      ) {
-        return;
-      }
-
-      socket.emit('stranger_typing', true);
-
-      let reply = directReply(text, session);
-
       // ------------------------------------------------------
-      // GROQ
+      // No real user
       // ------------------------------------------------------
 
-      if (!reply && groq) {
-        try {
-          const language =
-            isHinglish(text)
-              ? 'HINGLISH'
-              : 'ENGLISH';
-
-          const history =
-            session.history.slice(-14);
-
-          const response = await runAI(() =>
-            groq.chat.completions.create({
-              model: 'llama-3.3-70b-versatile',
-
-              messages: [
-                {
-                  role: 'system',
-                  content: `
-${SYSTEM_PROMPT}
-
-BOT:
-Name: ${session.name}
-Age: 21
-City: ${session.city}
-Activity: ${session.activity}
-Interests: ${session.interests.join(', ')}
-
-USER:
-Name: ${session.userName || 'unknown'}
-City: ${session.userCity || 'unknown'}
-Age: ${session.userAge || 'unknown'}
-Gender: ${session.userGender || 'unknown'}
-
-LANGUAGE: ${language}
-
-Continue the conversation.
-
-Do NOT restart with hi/hello.
-
-Do NOT automatically ask ASL.
-
-Respond to the latest user message only.
-`
-                },
-                ...history
-              ],
-
-              temperature: 0.78,
-              max_completion_tokens: 60
-            })
-          );
-
-          reply =
-            response?.choices?.[0]?.message?.content?.trim() || '';
-
-        } catch (error) {
-          console.error(
-            'Groq error:',
-            error.message
-          );
+      waitingQueue.set(
+        socket.id,
+        {
+          id: socket.id,
+          mood,
+          mediaMode,
+          joinedAt: Date.now()
         }
-      }
+      );
 
       // ------------------------------------------------------
-      // FALLBACK
+      // Bot only for text mode
       // ------------------------------------------------------
 
-      if (!reply) {
-        reply = fallbackReply(text);
-      }
-
-      reply = cleanReply(reply, session);
-
-      if (!reply) {
-        reply = fallbackReply(text);
-      }
-
-      // ------------------------------------------------------
-      // STALE RESPONSE CHECK
-      // ------------------------------------------------------
-
-      if (
-        !botSessions.has(socket.id) ||
-        generationId !== session.generationId
-      ) {
-        socket.emit('stranger_typing', false);
+      if (mediaMode !== 'text') {
         return;
       }
 
-      session.history.push({
-        role: 'assistant',
-        content: reply
-      });
+      const timer = setTimeout(() => {
+        const queued =
+          waitingQueue.get(socket.id);
 
-      if (session.history.length > 24) {
-        session.history =
-          session.history.slice(-24);
-      }
-
-      // ------------------------------------------------------
-      // TYPING DELAY
-      // ------------------------------------------------------
-
-      const delay =
-        700 +
-        Math.random() * 900 +
-        Math.min(reply.length * 20, 800);
-
-      session.typingTimer = setTimeout(() => {
-        if (
-          !botSessions.has(socket.id) ||
-          generationId !== session.generationId
-        ) {
+        if (!queued) {
           return;
         }
 
-        socket.emit('stranger_typing', false);
+        removeFromQueue(socket.id);
 
-        socket.emit('receive_message', {
-          text: reply,
-          from: `bot_${socket.id}`,
-          timestamp: Date.now()
+        // Create a completely independent session.
+        const session =
+          createBotSession(socket.id);
+
+        botSessions.set(
+          socket.id,
+          session
+        );
+
+        socket.emit(
+          'match_found',
+          {
+            partnerId:
+              'bot_' + socket.id,
+
+            initiator: false
+          }
+        );
+
+        // Different opening for every session.
+        const opening =
+          randomItem(OPENING_MESSAGES);
+
+        session.history.push({
+          role: 'assistant',
+          content: opening
         });
 
-        session.typingTimer = null;
+        const generation =
+          session.generation;
 
-      }, delay);
+        // Typing
+        socket.emit(
+          'stranger_typing',
+          true
+        );
 
-      session.generationTimer = null;
+        const typingTimer =
+          setTimeout(() => {
+            if (
+              session.ended ||
+              session.generation !== generation
+            ) {
+              return;
+            }
 
-    }, 350);
-  });
+            socket.emit(
+              'stranger_typing',
+              false
+            );
 
-  // ----------------------------------------------------------
-  // WEBRTC
-  // ----------------------------------------------------------
+            socket.emit(
+              'receive_message',
+              {
+                text: opening,
+                from:
+                  'bot_' + socket.id,
+                timestamp: Date.now()
+              }
+            );
+          }, 900);
 
-  socket.on('webrtc_signal', data => {
-    const partnerId = activePairs.get(socket.id);
+        addTimer(
+          session,
+          typingTimer
+        );
+      }, BOT_WAIT_TIME);
 
-    if (partnerId) {
-      io.to(partnerId).emit(
-        'webrtc_signal',
-        data
+      // Store timer indirectly using a temporary property.
+      // This prevents a stale bot from starting after skip.
+      socket.data = socket.data || {};
+
+      socket.data.botMatchTimer =
+        timer;
+
+    } catch (error) {
+      console.error(
+        'find_match error:',
+        error
       );
     }
   });
 
-  // ----------------------------------------------------------
-  // DISCONNECT
-  // ----------------------------------------------------------
+  // ==========================================================
+  // SEND MESSAGE
+  // ==========================================================
 
-  socket.on('disconnect', () => {
-    clearSession(socket);
+  socket.on(
+    'send_message',
+    async data => {
+      try {
+        const text =
+          cleanText(
+            data?.text || ''
+          );
 
-    waitingQueue.delete(socket.id);
+        if (!text) {
+          return;
+        }
 
-    const partnerId =
-      activePairs.get(socket.id);
+        const safeText =
+          text.slice(
+            0,
+            MAX_MESSAGE_LENGTH
+          );
 
-    if (partnerId) {
-      io.to(partnerId).emit('partner_left');
+        // ----------------------------------------------------
+        // Real user
+        // ----------------------------------------------------
 
-      activePairs.delete(partnerId);
-      activePairs.delete(socket.id);
+        const partnerId =
+          activePairs.get(socket.id);
+
+        if (partnerId) {
+          io.to(partnerId).emit(
+            'receive_message',
+            {
+              text: safeText,
+              from: socket.id,
+              timestamp: Date.now()
+            }
+          );
+
+          return;
+        }
+
+        // ----------------------------------------------------
+        // Bot
+        // ----------------------------------------------------
+
+        const session =
+          botSessions.get(socket.id);
+
+        if (!session || session.ended) {
+          return;
+        }
+
+        session.messageCount++;
+
+        // ----------------------------------------------------
+        // Abuse detection BEFORE AI
+        // ----------------------------------------------------
+
+        if (isProfanity(safeText)) {
+          const abuse =
+            handleAbuse(
+              socket,
+              session
+            );
+
+          if (abuse.shouldEnd) {
+            return;
+          }
+
+          if (abuse.reply) {
+            session.history.push({
+              role: 'user',
+              content: safeText
+            });
+
+            session.history.push({
+              role: 'assistant',
+              content: abuse.reply
+            });
+
+            socket.emit(
+              'stranger_typing',
+              true
+            );
+
+            const generation =
+              session.generation;
+
+            const timer =
+              setTimeout(() => {
+                if (
+                  session.ended ||
+                  session.generation !== generation
+                ) {
+                  return;
+                }
+
+                socket.emit(
+                  'stranger_typing',
+                  false
+                );
+
+                socket.emit(
+                  'receive_message',
+                  {
+                    text: abuse.reply,
+                    from:
+                      'bot_' + socket.id,
+                    timestamp: Date.now()
+                  }
+                );
+              },
+              600 + Math.random() * 500);
+
+            addTimer(
+              session,
+              timer
+            );
+          }
+
+          return;
+        }
+
+        // ----------------------------------------------------
+        // Save user message
+        // ----------------------------------------------------
+
+        session.history.push({
+          role: 'user',
+          content: safeText
+        });
+
+        // Keep history manageable.
+        if (
+          session.history.length >
+          MAX_HISTORY
+        ) {
+          session.history =
+            session.history.slice(
+              -MAX_HISTORY
+            );
+        }
+
+        // ----------------------------------------------------
+        // Direct deterministic replies
+        // ----------------------------------------------------
+
+        const direct =
+          directReply(
+            safeText,
+            session
+          );
+
+        if (direct) {
+          session.history.push({
+            role: 'assistant',
+            content: direct
+          });
+
+          socket.emit(
+            'stranger_typing',
+            true
+          );
+
+          const generation =
+            session.generation;
+
+          const timer =
+            setTimeout(() => {
+              if (
+                session.ended ||
+                session.generation !== generation
+              ) {
+                return;
+              }
+
+              socket.emit(
+                'stranger_typing',
+                false
+              );
+
+              socket.emit(
+                'receive_message',
+                {
+                  text: direct,
+                  from:
+                    'bot_' + socket.id,
+                  timestamp: Date.now()
+                }
+              );
+            },
+            500 + Math.random() * 800);
+
+          addTimer(
+            session,
+            timer
+          );
+
+          return;
+        }
+
+        // ----------------------------------------------------
+        // Groq unavailable
+        // ----------------------------------------------------
+
+        if (!groq) {
+          const fallback =
+            randomItem(
+              FALLBACK_REPLIES
+            );
+
+          session.history.push({
+            role: 'assistant',
+            content: fallback
+          });
+
+          socket.emit(
+            'stranger_typing',
+            false
+          );
+
+          socket.emit(
+            'receive_message',
+            {
+              text: fallback,
+              from:
+                'bot_' + socket.id,
+              timestamp: Date.now()
+            }
+          );
+
+          return;
+        }
+
+        // ----------------------------------------------------
+        // Generate AI response
+        // ----------------------------------------------------
+
+        const generation =
+          session.generation;
+
+        socket.emit(
+          'stranger_typing',
+          true
+        );
+
+        const messages = [
+          {
+            role: 'system',
+            content:
+              buildSystemPrompt(session)
+          },
+          ...session.history.slice(
+            -MAX_HISTORY
+          )
+        ];
+
+        let response;
+
+        try {
+          response =
+            await groq.chat.completions.create(
+              {
+                model:
+                  'llama-3.3-70b-versatile',
+
+                messages,
+
+                temperature: 0.85,
+
+                max_tokens: 50,
+
+                top_p: 0.9
+              }
+            );
+        } catch (aiError) {
+          console.error(
+            'Groq error:',
+            aiError
+          );
+
+          if (
+            !session.ended &&
+            session.generation === generation
+          ) {
+            socket.emit(
+              'stranger_typing',
+              false
+            );
+
+            const fallback =
+              randomItem(
+                FALLBACK_REPLIES
+              );
+
+            session.history.push({
+              role: 'assistant',
+              content: fallback
+            });
+
+            socket.emit(
+              'receive_message',
+              {
+                text: fallback,
+                from:
+                  'bot_' + socket.id,
+                timestamp: Date.now()
+              }
+            );
+          }
+
+          return;
+        }
+
+        // ----------------------------------------------------
+        // IMPORTANT:
+        // User may have skipped while Groq was thinking.
+        // ----------------------------------------------------
+
+        if (
+          session.ended ||
+          session.generation !== generation
+        ) {
+          return;
+        }
+
+        let reply =
+          response?.choices?.[0]?.message?.content ||
+          '';
+
+        reply =
+          cleanAIReply(
+            reply,
+            session
+          );
+
+        // Never allow AI to output abuse.
+        if (isProfanity(reply)) {
+          reply =
+            randomItem(
+              FALLBACK_REPLIES
+            );
+        }
+
+        rememberReply(
+          session,
+          reply
+        );
+
+        session.history.push({
+          role: 'assistant',
+          content: reply
+        });
+
+        // ----------------------------------------------------
+        // Human-like typing delay
+        // ----------------------------------------------------
+
+        const delay =
+          Math.min(
+            2200,
+            500 +
+              reply.length * 35 +
+              Math.random() * 700
+          );
+
+        const timer =
+          setTimeout(() => {
+            if (
+              session.ended ||
+              session.generation !== generation
+            ) {
+              return;
+            }
+
+            socket.emit(
+              'stranger_typing',
+              false
+            );
+
+            socket.emit(
+              'receive_message',
+              {
+                text: reply,
+                from:
+                  'bot_' + socket.id,
+                timestamp: Date.now()
+              }
+            );
+          }, delay);
+
+        addTimer(
+          session,
+          timer
+        );
+
+      } catch (error) {
+        console.error(
+          'send_message error:',
+          error
+        );
+
+        const session =
+          botSessions.get(socket.id);
+
+        if (session) {
+          socket.emit(
+            'stranger_typing',
+            false
+          );
+        }
+      }
     }
-  });
+  );
+
+  // ==========================================================
+  // WEBRTC
+  // ==========================================================
+
+  socket.on(
+    'webrtc_signal',
+    data => {
+      const partnerId =
+        activePairs.get(socket.id);
+
+      if (partnerId) {
+        io.to(partnerId).emit(
+          'webrtc_signal',
+          data
+        );
+      }
+    }
+  );
+
+  // ==========================================================
+  // DISCONNECT
+  // ==========================================================
+
+  socket.on(
+    'disconnect',
+    reason => {
+      console.log(
+        `Socket disconnected: ${socket.id}`,
+        reason
+      );
+
+      // Clear bot match timer.
+      if (
+        socket.data?.botMatchTimer
+      ) {
+        clearTimeout(
+          socket.data.botMatchTimer
+        );
+
+        socket.data.botMatchTimer =
+          null;
+      }
+
+      // Remove queue.
+      removeFromQueue(
+        socket.id
+      );
+
+      // End bot session.
+      if (
+        botSessions.has(socket.id)
+      ) {
+        const session =
+          botSessions.get(socket.id);
+
+        session.generation++;
+
+        clearSessionTimers(
+          session
+        );
+
+        session.ended = true;
+
+        botSessions.delete(
+          socket.id
+        );
+      }
+
+      // Remove real pair.
+      const partnerId =
+        activePairs.get(
+          socket.id
+        );
+
+      if (partnerId) {
+        activePairs.delete(
+          socket.id
+        );
+
+        activePairs.delete(
+          partnerId
+        );
+
+        io.to(partnerId).emit(
+          'partner_left',
+          {
+            reason: 'disconnected'
+          }
+        );
+      }
+    }
+  );
 });
 
 // ============================================================
-// START SERVER
+// SERVER
 // ============================================================
 
-server.listen(PORT, () => {
-  console.log(`Miloo server running on port ${PORT}`);
-  console.log(`AI concurrency: ${MAX_AI_CONCURRENT}`);
-});
+server.listen(
+  PORT,
+  () => {
+    console.log(
+      `Server running on port ${PORT}`
+    );
+  }
+);
