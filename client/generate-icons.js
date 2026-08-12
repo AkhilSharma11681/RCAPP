@@ -1,3 +1,4 @@
+/* global require, Buffer */
 const sharp = require('sharp');
 
 const svg = Buffer.from(`

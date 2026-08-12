@@ -10,7 +10,7 @@ export default function CleanChatUI({ socket }) {
     if (!socket) return;
 
     // Direct Stranger Match (No AI indicator)
-    socket.on('match_found', (data) => {
+    socket.on('match_found', () => {
       setStatus('connected');
       setMessages([{ sender: 'system', text: 'You are now connected with a random stranger. Say hi!' }]);
     });

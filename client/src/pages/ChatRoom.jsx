@@ -424,6 +424,7 @@ export default function ChatRoom({
           /* ICE state watcher will surface a failure */
         })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleWebRTCSignal = useCallback((data) => {

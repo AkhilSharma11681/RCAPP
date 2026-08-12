@@ -11,7 +11,7 @@ export function markFirstMatch() {
     if (localStorage.getItem(FIRST_MATCH_KEY)) return false
     localStorage.setItem(FIRST_MATCH_KEY, '1')
     return true
-  } catch (e) {
+  } catch {
     return false
   }
 }

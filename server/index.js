@@ -7,7 +7,6 @@ const { Server } = require('socket.io');
 const Groq = require('groq-sdk');
 
 const app = express();
-
 app.use(cors());
 app.use(express.json({ limit: '100kb' }));
 
@@ -24,92 +23,55 @@ const groq = process.env.GROQ_API_KEY
   ? new Groq({ apiKey: process.env.GROQ_API_KEY })
   : null;
 
+const PORT = process.env.PORT || 5000;
+
 // ============================================================
-// BOT PERSONAS
+// BOT CONFIG
+// ============================================================
+
+const BOT_WAIT = 5000;
+const MAX_AI_CONCURRENT = 6;
+const MAX_AI_QUEUE = 30;
+
+// ============================================================
+// PERSONAS
 // ============================================================
 
 const PERSONAS = [
-  {
-    name: 'Ananya',
-    city: 'Delhi',
-    activity: 'studying',
-    interests: ['music', 'movies', 'college']
-  },
-  {
-    name: 'Riya',
-    city: 'Mumbai',
-    activity: 'listening to music',
-    interests: ['music', 'travel', 'shows']
-  },
-  {
-    name: 'Sneha',
-    city: 'Jaipur',
-    activity: 'studying',
-    interests: ['movies', 'food', 'travel']
-  },
-  {
-    name: 'Kavya',
-    city: 'Bangalore',
-    activity: 'watching a series',
-    interests: ['anime', 'music', 'college']
-  },
-  {
-    name: 'Priya',
-    city: 'Pune',
-    activity: 'studying',
-    interests: ['books', 'music', 'movies']
-  },
-  {
-    name: 'Aditi',
-    city: 'Lucknow',
-    activity: 'scrolling Instagram',
-    interests: ['fashion', 'music', 'food']
-  },
-  {
-    name: 'Mehak',
-    city: 'Chandigarh',
-    activity: 'just chilling',
-    interests: ['shows', 'travel', 'music']
-  },
-  {
-    name: 'Ishita',
-    city: 'Hyderabad',
-    activity: 'watching YouTube',
-    interests: ['movies', 'music', 'gaming']
-  },
-  {
-    name: 'Neha',
-    city: 'Kolkata',
-    activity: 'studying',
-    interests: ['books', 'music', 'college']
-  },
-  {
-    name: 'Simran',
-    city: 'Amritsar',
-    activity: 'listening to music',
-    interests: ['music', 'food', 'travel']
-  },
-  {
-    name: 'Pooja',
-    city: 'Indore',
-    activity: 'watching a movie',
-    interests: ['movies', 'food', 'music']
-  },
-  {
-    name: 'Shreya',
-    city: 'Ahmedabad',
-    activity: 'studying',
-    interests: ['business', 'music', 'shows']
-  }
+  { name: 'Ananya', city: 'Delhi', activity: 'studying', interests: ['music', 'movies', 'college'] },
+  { name: 'Riya', city: 'Mumbai', activity: 'listening to music', interests: ['music', 'travel', 'shows'] },
+  { name: 'Sneha', city: 'Jaipur', activity: 'studying', interests: ['movies', 'food', 'travel'] },
+  { name: 'Kavya', city: 'Bangalore', activity: 'watching a series', interests: ['anime', 'music', 'college'] },
+  { name: 'Priya', city: 'Pune', activity: 'chilling', interests: ['books', 'music', 'movies'] },
+  { name: 'Aditi', city: 'Lucknow', activity: 'scrolling reels', interests: ['music', 'food', 'fashion'] },
+  { name: 'Mehak', city: 'Chandigarh', activity: 'watching a show', interests: ['travel', 'music', 'shows'] },
+  { name: 'Ishita', city: 'Hyderabad', activity: 'watching YouTube', interests: ['movies', 'music', 'gaming'] },
+  { name: 'Neha', city: 'Kolkata', activity: 'studying', interests: ['books', 'music', 'college'] },
+  { name: 'Simran', city: 'Amritsar', activity: 'listening to music', interests: ['music', 'food', 'travel'] },
+  { name: 'Pooja', city: 'Indore', activity: 'watching a movie', interests: ['movies', 'food', 'music'] },
+  { name: 'Shreya', city: 'Ahmedabad', activity: 'having chai', interests: ['music', 'shows', 'food'] },
+  { name: 'Nandini', city: 'Bhopal', activity: 'finishing college work', interests: ['music', 'movies', 'college'] },
+  { name: 'Ira', city: 'Dehradun', activity: 'reading', interests: ['books', 'travel', 'music'] }
 ];
 
+// No fixed "hii asl?" opening.
 const OPENINGS = [
-  'hii',
-  'heyy',
-  'hii, how are you?',
-  'hey there',
-  'yo, what’s good?',
-  'hey stranger'
+  "hey, what's up?",
+  "what are you upto?",
+  "random match huh 😭",
+  "how's your day going?",
+  "what's the vibe today?",
+  "what are you doing rn?",
+  "sooo, what's going on?",
+  "how's life?",
+  "bored or actually social today?",
+  "okay stranger, tell me something 😂",
+  "what are you into?",
+  "how's your day been?",
+  "just got matched lol",
+  "what do you usually do for fun?",
+  "okay, your turn to start 😭",
+  "what's keeping you awake?"
 ];
 
 function pick(arr) {
@@ -117,152 +79,119 @@ function pick(arr) {
 }
 
 // ============================================================
-// AI SYSTEM PROMPT
+// AI CONCURRENCY QUEUE
+// ============================================================
+
+let activeAI = 0;
+const aiQueue = [];
+
+function runAI(task) {
+  return new Promise((resolve, reject) => {
+    if (aiQueue.length >= MAX_AI_QUEUE) {
+      reject(new Error('AI queue full'));
+      return;
+    }
+
+    aiQueue.push({ task, resolve, reject });
+    processAIQueue();
+  });
+}
+
+function processAIQueue() {
+  while (activeAI < MAX_AI_CONCURRENT && aiQueue.length) {
+    const job = aiQueue.shift();
+
+    activeAI++;
+
+    Promise.resolve()
+      .then(job.task)
+      .then(job.resolve)
+      .catch(job.reject)
+      .finally(() => {
+        activeAI--;
+        processAIQueue();
+      });
+  }
+}
+
+// ============================================================
+// SYSTEM PROMPT
 // ============================================================
 
 const SYSTEM_PROMPT = `
 You are Miloo's AI stranger.
 
-You are chatting casually with a young Indian adult.
+You are an AI chatting casually with a young Indian adult.
 
 IMPORTANT:
-- You are an AI on Miloo.
-- If directly asked whether you are AI/bot, be honest.
+- If directly asked whether you are AI or a bot, be honest.
 - Never claim to be a real human.
+- Talk naturally like a person texting.
 - Never sound like customer support.
-- Never sound like an assistant.
-- Talk like a normal person texting.
 
 LANGUAGE:
-
-Match the user's language naturally.
-
-English user:
-Use casual English.
-
-Roman Hindi user:
-Use natural Indian Hinglish.
-
-Mixed user:
-Naturally mix English and Roman Hindi.
-
-Do NOT force Hinglish.
-
-Examples:
-
-User: "where are you from?"
-Reply: "I'm from Jaipur. You?"
-
-User: "aap kaha se ho?"
-Reply: "Jaipur se hu, tum?"
-
-User: "kya kar rhi ho?"
-Reply: "Bas music sun rahi hu."
-
-User: "what are you doing?"
-Reply: "Just chilling rn."
-
-CONVERSATION:
-
-- Answer the latest message.
-- Remember previous messages.
-- Don't ask for information already provided.
-- Don't randomly change topics.
-- Don't ask a question after every message.
-- React to what the user actually said.
-- Don't repeatedly say "nice", "interesting", "oh really", "haha", "lol", or "wbu".
-- Don't repeat the same response.
-- Don't force slang.
-- Don't make every reply a question.
+- Match the user's language.
+- English user = casual English.
+- Hindi/Roman Hindi user = natural Hinglish.
+- Mixed user = naturally mix English and Hindi.
+- Do not force Hinglish.
 
 STYLE:
-
 - Usually 3-20 words.
-- One short message.
-- No paragraphs.
-- Casual texting.
-- Natural Indian texting style.
-- Use emojis rarely.
-- Don't overuse "haha" or "lol".
+- Short messages.
+- Casual Indian texting.
+- Don't overuse haha, lol, nice, interesting.
+- Don't ask a question after every message.
+- Don't repeat previous replies.
+- React to what the user actually said.
 
-ASL:
+VERY IMPORTANT:
+Do NOT automatically ask "ASL".
+Do NOT automatically ask age, sex or location.
+Do NOT restart the conversation with "hii" or "hello".
 
-ASL means age, sex, location.
+Continue naturally from the latest message.
 
-Do NOT automatically ask for ASL.
+Use the supplied persona information.
+Never change the persona's name or city.
 
-Only discuss age, gender, or location when relevant.
-
-PERSONA:
-
-Use the supplied profile.
-Never change the bot's name or city.
-
-SAFETY:
-
-Never give an exact home address, house number,
-flat number, room number, phone number, or private location.
-
-If asked for an exact address:
-"I don't share my exact address."
+Never provide exact addresses, phone numbers or private locations.
 
 If asked to meet:
 "Let's get to know each other here first."
 
-Do not participate in explicit sexual content,
-nude requests, or explicit sexual roleplay.
-
-Keep safety responses short and casual.
-
-The goal is natural conversation, not an interview.
+Keep conversations natural and short.
 `;
 
 // ============================================================
-// LANGUAGE DETECTION
+// LANGUAGE
 // ============================================================
 
 function isHinglish(text = '') {
-  const t = text.toLowerCase();
-
   const words = [
-    'aap', 'ap', 'tum', 'tu',
-    'kaha', 'kahan', 'kahaan', 'kidhar',
-    'kya', 'kyu', 'kyun',
-    'kaise', 'kaisa', 'kaisi',
-    'hai', 'ho', 'hain',
-    'kar', 'kr', 'karti', 'karta',
-    'raha', 'rahi', 'rha', 'rhi',
-    'mera', 'meri', 'mere',
-    'tera', 'teri', 'tere',
-    'tumhara', 'tumhari',
-    'aapka', 'aapki',
-    'haan', 'han', 'nahi', 'nhi',
-    'yaar', 'bhai',
-    'batao', 'btao',
-    'achha', 'accha',
-    'sahi', 'mast', 'badhiya',
-    'padhai', 'ghar', 'kaam',
-    'abhi', 'aaj', 'raat',
-    'wbu', 'wyd'
+    'aap', 'ap', 'tum', 'tu', 'kaha', 'kahan', 'kya',
+    'kyu', 'kyun', 'kaise', 'kaisa', 'kaisi', 'hai', 'ho',
+    'hain', 'kar', 'kr', 'karti', 'karta', 'raha', 'rahi',
+    'rha', 'rhi', 'mera', 'meri', 'mere', 'tera', 'teri',
+    'tumhara', 'tumhari', 'aapka', 'aapki', 'haan', 'han',
+    'nahi', 'nhi', 'yaar', 'bhai', 'batao', 'btao', 'achha',
+    'accha', 'sahi', 'mast', 'badhiya', 'padhai', 'ghar',
+    'kaam', 'abhi', 'aaj', 'raat', 'wbu', 'wyd'
   ];
 
-  return words.some(word => {
-    if (word.includes(' ')) {
-      return t.includes(word);
-    }
+  const t = text.toLowerCase();
 
-    return new RegExp(`\\b${word}\\b`, 'i').test(t);
-  });
+  return words.some(word =>
+    new RegExp(`\\b${word}\\b`, 'i').test(t)
+  );
 }
 
 // ============================================================
-// INTENT DETECTION
+// INTENT FUNCTIONS
 // ============================================================
 
 function isGreeting(text = '') {
-  return /^(hi+|hey+|hello+|hlo+|yo+|sup)\b/i.test(
-    text.trim()
-  );
+  return /^(hi+|hey+|hello+|hlo+|yo+|sup)\b/i.test(text.trim());
 }
 
 function isGoodbye(text = '') {
@@ -270,7 +199,7 @@ function isGoodbye(text = '') {
 }
 
 function isWBU(text = '') {
-  const t = text.trim().toLowerCase().replace(/\?+$/, '');
+  const t = text.toLowerCase().trim().replace(/\?+$/, '');
 
   return [
     'wbu',
@@ -287,10 +216,10 @@ function isASLMeaning(text = '') {
   const t = text.toLowerCase().replace(/\s+/g, ' ').trim();
 
   return (
-    /\bwhat is asl\b/.test(t) ||
-    /\bwhats asl\b/.test(t) ||
-    /\bwhat does asl mean\b/.test(t) ||
-    /\basl meaning\b/.test(t)
+    /\bwhat is asl\b/i.test(t) ||
+    /\bwhats asl\b/i.test(t) ||
+    /\bwhat does asl mean\b/i.test(t) ||
+    /\basl meaning\b/i.test(t)
   );
 }
 
@@ -298,14 +227,15 @@ function isNameQuestion(text = '') {
   const t = text.toLowerCase();
 
   return (
-    /\bwhat(?:'s| is) your name\b/.test(t) ||
-    /\bwhats your name\b/.test(t) ||
-    /\bwho are you\b/.test(t) ||
-    /\byour name\b/.test(t) ||
-    /\bur name\b/.test(t) ||
-    /\bnaam kya\b/.test(t) ||
-    /\btumhara naam\b/.test(t) ||
-    /\baapka naam\b/.test(t)
+    /\bwhat is your name\b/i.test(t) ||
+    /\bwhat's your name\b/i.test(t) ||
+    /\bwhats your name\b/i.test(t) ||
+    /\bwho are you\b/i.test(t) ||
+    /\byour name\b/i.test(t) ||
+    /\bur name\b/i.test(t) ||
+    /\bnaam kya\b/i.test(t) ||
+    /\btumhara naam\b/i.test(t) ||
+    /\baapka naam\b/i.test(t)
   );
 }
 
@@ -313,12 +243,11 @@ function isAgeQuestion(text = '') {
   const t = text.toLowerCase();
 
   return (
-    /\bhow old are you\b/.test(t) ||
-    /\bwhat(?:'s| is) your age\b/.test(t) ||
-    /\byour age\b/.test(t) ||
-    /\bur age\b/.test(t) ||
-    /\bage kya\b/.test(t) ||
-    /\bkitne saal\b/.test(t)
+    /\bhow old are you\b/i.test(t) ||
+    /\byour age\b/i.test(t) ||
+    /\bur age\b/i.test(t) ||
+    /\bage kya\b/i.test(t) ||
+    /\bkitne saal\b/i.test(t)
   );
 }
 
@@ -326,21 +255,18 @@ function isLocationQuestion(text = '') {
   const t = text.toLowerCase();
 
   return (
-    /\bwhere are you\b/.test(t) ||
-    /\bwhere do you live\b/.test(t) ||
-    /\bwhere are you from\b/.test(t) ||
-    /\bwhere are u from\b/.test(t) ||
-    /\bwhere r u from\b/.test(t) ||
-    /\bwhere u from\b/.test(t) ||
-    /\byour city\b/.test(t) ||
-    /\bkaha se ho\b/.test(t) ||
-    /\bkahan se ho\b/.test(t) ||
-    /\bkahaan se ho\b/.test(t) ||
-    /\bkidhar se ho\b/.test(t) ||
-    /\btum kaha\b/.test(t) ||
-    /\btum kahan\b/.test(t) ||
-    /\baap kaha\b/.test(t) ||
-    /\baap kahan\b/.test(t)
+    /\bwhere are you\b/i.test(t) ||
+    /\bwhere do you live\b/i.test(t) ||
+    /\bwhere are you from\b/i.test(t) ||
+    /\bwhere are u from\b/i.test(t) ||
+    /\bwhere r u from\b/i.test(t) ||
+    /\byour city\b/i.test(t) ||
+    /\bkaha se ho\b/i.test(t) ||
+    /\bkahan se ho\b/i.test(t) ||
+    /\btum kaha\b/i.test(t) ||
+    /\btum kahan\b/i.test(t) ||
+    /\baap kaha\b/i.test(t) ||
+    /\baap kahan\b/i.test(t)
   );
 }
 
@@ -348,19 +274,18 @@ function isActivityQuestion(text = '') {
   const t = text.toLowerCase();
 
   return (
-    /\bwhat are you doing\b/.test(t) ||
-    /\bwhat r u doing\b/.test(t) ||
-    /\bwhat are u doing\b/.test(t) ||
-    /\bwhat do you do\b/.test(t) ||
-    /\bwhat do u do\b/.test(t) ||
-    /\bwyd\b/.test(t) ||
-    /\bkya kar rahe\b/.test(t) ||
-    /\bkya kr rahe\b/.test(t) ||
-    /\bkya kar rhe\b/.test(t) ||
-    /\bkya kr rhe\b/.test(t) ||
-    /\bkya kar rahi\b/.test(t) ||
-    /\bkya kr rhi\b/.test(t) ||
-    /\bkya kar raha\b/.test(t)
+    /\bwhat are you doing\b/i.test(t) ||
+    /\bwhat r u doing\b/i.test(t) ||
+    /\bwhat are u doing\b/i.test(t) ||
+    /\bwhat do you do\b/i.test(t) ||
+    /\bwhat do u do\b/i.test(t) ||
+    /\bwyd\b/i.test(t) ||
+    /\bkya kar rahe\b/i.test(t) ||
+    /\bkya kr rahe\b/i.test(t) ||
+    /\bkya kar rhe\b/i.test(t) ||
+    /\bkya kr rhe\b/i.test(t) ||
+    /\bkya kar rahi\b/i.test(t) ||
+    /\bkya kr rhi\b/i.test(t)
   );
 }
 
@@ -368,16 +293,18 @@ function isBotQuestion(text = '') {
   const t = text.toLowerCase();
 
   return (
-    /\bare you a bot\b/.test(t) ||
-    /\bare u a bot\b/.test(t) ||
-    /\bis this a bot\b/.test(t) ||
-    /\bare you ai\b/.test(t) ||
-    /\bare u ai\b/.test(t) ||
-    /\bai ho\b/.test(t) ||
-    /\bbot ho\b/.test(t)
+    /\bare you a bot\b/i.test(t) ||
+    /\bare u a bot\b/i.test(t) ||
+    /\bis this a bot\b/i.test(t) ||
+    /\bare you ai\b/i.test(t) ||
+    /\bare u ai\b/i.test(t) ||
+    /\bai ho\b/i.test(t) ||
+    /\bbot ho\b/i.test(t)
   );
 }
 
+// IMPORTANT: JavaScript does NOT support /x.
+// Keep these regexes on one line.
 function isNSFW(text = '') {
   return /\b(nude|nudes|naked|boobs?|tits?|dick|penis|pussy|sex|sexual|masturbat\w*|jerk\s*off|blowjob|handjob|send\s+nudes?)\b/i.test(text);
 }
@@ -386,14 +313,14 @@ function isAddressRequest(text = '') {
   const t = text.toLowerCase();
 
   return (
-    /\bexact address\b/.test(t) ||
-    /\bhome address\b/.test(t) ||
-    /\bexact location\b/.test(t) ||
-    /\bwhere exactly\b/.test(t) ||
-    /\bhouse number\b/.test(t) ||
-    /\bflat number\b/.test(t) ||
-    /\broom number\b/.test(t) ||
-    /\bgive me your address\b/.test(t)
+    /\bexact address\b/i.test(t) ||
+    /\bhome address\b/i.test(t) ||
+    /\bexact location\b/i.test(t) ||
+    /\bwhere exactly\b/i.test(t) ||
+    /\bhouse number\b/i.test(t) ||
+    /\bflat number\b/i.test(t) ||
+    /\broom number\b/i.test(t) ||
+    /\bgive me your address\b/i.test(t)
   );
 }
 
@@ -401,12 +328,12 @@ function isMeetingRequest(text = '') {
   const t = text.toLowerCase();
 
   return (
-    /\bmeet me\b/.test(t) ||
-    /\bmeet up\b/.test(t) ||
-    /\bwant to meet\b/.test(t) ||
-    /\bwanna meet\b/.test(t) ||
-    /\bhang out\b/.test(t) ||
-    /\bcome over\b/.test(t)
+    /\bmeet me\b/i.test(t) ||
+    /\bmeet up\b/i.test(t) ||
+    /\bwant to meet\b/i.test(t) ||
+    /\bwanna meet\b/i.test(t) ||
+    /\bhang out\b/i.test(t) ||
+    /\bcome over\b/i.test(t)
   );
 }
 
@@ -418,50 +345,35 @@ function isProfanity(text = '') {
 // USER INFO
 // ============================================================
 
-const INDIAN_CITIES =
-  'delhi|new delhi|mumbai|jaipur|pune|bangalore|bengaluru|' +
-  'hyderabad|lucknow|indore|chandigarh|ahmedabad|surat|vadodara|' +
-  'bhopal|kanpur|nagpur|patna|ranchi|kolkata|amritsar|noida|' +
-  'gurgaon|gurugram|ghaziabad|agra|dehradun|varanasi|prayagraj|' +
-  'meerut|jodhpur|udaipur|kochi|coimbatore|mysore|mysuru|' +
-  'thiruvananthapuram|bhubaneswar|visakhapatnam|vizag';
+const CITY_REGEX =
+  /\b(delhi|new delhi|mumbai|jaipur|pune|bangalore|bengaluru|hyderabad|lucknow|indore|chandigarh|ahmedabad|surat|vadodara|bhopal|kanpur|nagpur|patna|ranchi|kolkata|amritsar|noida|gurgaon|gurugram|ghaziabad|agra|dehradun|varanasi|prayagraj|meerut|jodhpur|udaipur|kochi|coimbatore|mysore|mysuru|thiruvananthapuram|bhubaneswar|visakhapatnam|vizag)\b/i;
 
 function extractUserInfo(text = '') {
   const info = {};
 
-  const city = text.match(
-    new RegExp(`\\b(${INDIAN_CITIES})\\b`, 'i')
-  );
-
-  if (city) {
-    info.city = city[1]
-      .replace(/\b\w/g, c => c.toUpperCase());
-  }
+  const city = text.match(CITY_REGEX);
+  if (city) info.city = city[1];
 
   const age = text.match(
     /\b(18|19|20|21|22|23|24|25|26|27|28|29)\b/
   );
 
-  if (age) {
-    info.age = age[1];
-  }
+  if (age) info.age = age[1];
 
   const gender = text.match(
     /\b(male|female|boy|girl|man|woman|ladka|ladki)\b/i
   );
 
-  if (gender) {
-    info.gender = gender[1];
-  }
+  if (gender) info.gender = gender[1];
 
-  const namePatterns = [
+  const patterns = [
     /\bmy name is\s+([a-zA-Z]{2,20})\b/i,
     /\bmera naam\s+([a-zA-Z]{2,20})\b/i,
     /\bi am\s+([a-zA-Z]{2,20})\b/i,
     /\bi'm\s+([a-zA-Z]{2,20})\b/i
   ];
 
-  const ignored = new Set([
+  const ignored = [
     'from',
     'male',
     'female',
@@ -473,17 +385,13 @@ function extractUserInfo(text = '') {
     'ok',
     'happy',
     'free'
-  ]);
+  ];
 
-  for (const regex of namePatterns) {
-    const match = text.match(regex);
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
 
-    if (!match) continue;
-
-    const candidate = match[1];
-
-    if (!ignored.has(candidate.toLowerCase())) {
-      info.name = candidate;
+    if (match && !ignored.includes(match[1].toLowerCase())) {
+      info.name = match[1];
       break;
     }
   }
@@ -523,12 +431,12 @@ function directReply(text, session) {
   if (isBotQuestion(text)) {
     return hinglish
       ? 'haan, Miloo ka AI hu 😄'
-      : "Yeah, I'm Miloo's AI 😄";
+      : "yeah, I'm Miloo's AI 😄";
   }
 
   if (isNameQuestion(text)) {
     return hinglish
-      ? `${session.name}. Tumhara?`
+      ? `${session.name} hu. Tumhara?`
       : `I'm ${session.name}. What's yours?`;
   }
 
@@ -544,13 +452,7 @@ function directReply(text, session) {
       : `I'm from ${session.city}. You?`;
   }
 
-  if (isActivityQuestion(text)) {
-    return hinglish
-      ? `bas ${session.activity} kar rahi hu.`
-      : `just ${session.activity}.`;
-  }
-
-  if (isWBU(text)) {
+  if (isActivityQuestion(text) || isWBU(text)) {
     return hinglish
       ? `bas ${session.activity} kar rahi hu.`
       : `just ${session.activity}.`;
@@ -576,28 +478,54 @@ function fallbackReply(text) {
     return pick(
       hinglish
         ? [
-            'hii, kya scene hai?',
-            'heyy, kaise ho?',
-            'hii, kya kar rahe?',
-            'hey, sab badhiya?'
+            'heyy, kya scene hai?',
+            'hii, kaise ho?',
+            'hey, kya kar rahe?',
+            'sab badhiya?'
           ]
         : [
-            'hey, how are you?',
-            'hii, what’s up?',
-            'hey stranger',
-            'heyy, how’s it going?'
+            "hey, what's up?",
+            'how are you?',
+            "what's going on?",
+            "how's your day?"
           ]
     );
   }
 
   if (isGoodbye(text)) {
-    return 'bye, take care.';
+    return pick([
+      'bye, take care.',
+      'see ya later.',
+      'take care, stranger.'
+    ]);
   }
 
   if (/\b(bored|boring|nothing)\b/i.test(text)) {
     return hinglish
-      ? 'same yaar, kya karein?'
-      : 'same, what should we do?';
+      ? pick([
+          'same yaar 😭',
+          'haan same, bore ho rahi.',
+          'kuch interesting karo 😂'
+        ])
+      : pick([
+          'same honestly 😭',
+          'yeah, kinda bored too.',
+          'we need better plans 😂'
+        ]);
+  }
+
+  if (/\b(music|song|songs)\b/i.test(text)) {
+    return hinglish
+      ? pick([
+          'music toh always works yaar.',
+          'acha, kya sunte ho?',
+          'same, music is life 😭'
+        ])
+      : pick([
+          'music is always a good choice.',
+          'what kind of music?',
+          'same, music fixes everything 😭'
+        ]);
   }
 
   return hinglish
@@ -606,7 +534,7 @@ function fallbackReply(text) {
         'haan, samajh gayi.',
         'ohh accha.',
         'sahi hai.',
-        'aur batao.'
+        'aur batao?'
       ])
     : pick([
         'oh, really?',
@@ -618,27 +546,26 @@ function fallbackReply(text) {
 }
 
 // ============================================================
-// RESPONSE CLEANING
+// CLEAN AI RESPONSE
 // ============================================================
 
 function cleanReply(reply, session) {
   if (!reply) return '';
 
   let result = String(reply)
-    .replace(/\n+/g, ' ')
+    .replace(/\s+/g, ' ')
     .replace(/^(assistant|ai|bot)\s*:\s*/i, '')
     .replace(/^["']|["']$/g, '')
     .trim();
 
-  // Hard safety limit.
   if (result.length > 220) {
     result = result.slice(0, 217).trim() + '...';
   }
 
   const previous = session.history
-    .filter(m => m.role === 'assistant')
-    .slice(-6)
-    .map(m => m.content.toLowerCase().trim());
+    .filter(x => x.role === 'assistant')
+    .slice(-8)
+    .map(x => x.content.toLowerCase().trim());
 
   if (previous.includes(result.toLowerCase())) {
     return '';
@@ -651,7 +578,7 @@ function cleanReply(reply, session) {
 // MATCHING
 // ============================================================
 
-const waitingQueue = [];
+const waitingQueue = new Map();
 const activePairs = new Map();
 const botSessions = new Map();
 const botTimers = new Map();
@@ -665,17 +592,38 @@ function clearBotTimer(socketId) {
   }
 }
 
+function clearSession(socket) {
+  const session = botSessions.get(socket.id);
+
+  if (session?.generationTimer) {
+    clearTimeout(session.generationTimer);
+  }
+
+  if (session?.typingTimer) {
+    clearTimeout(session.typingTimer);
+  }
+
+  botSessions.delete(socket.id);
+  clearBotTimer(socket.id);
+
+  socket.emit('stranger_typing', false);
+}
+
 function findMatch(socketId, mediaMode, mood) {
-  return waitingQueue.find(user => {
-    if (user.id === socketId) return false;
-    if (user.mediaMode !== mediaMode) return false;
+  for (const user of waitingQueue.values()) {
+    if (user.id === socketId) continue;
+    if (user.mediaMode !== mediaMode) continue;
 
-    if (mood === 'any' || user.mood === 'any') {
-      return true;
+    if (
+      mood === 'any' ||
+      user.mood === 'any' ||
+      user.mood === mood
+    ) {
+      return user;
     }
+  }
 
-    return user.mood === mood;
-  });
+  return null;
 }
 
 // ============================================================
@@ -684,11 +632,12 @@ function findMatch(socketId, mediaMode, mood) {
 
 app.get('/api/health', (req, res) => {
   res.json({
-    onlineUsers: waitingQueue.length + activePairs.size,
-    waitingUsers: waitingQueue.length,
+    status: 'ok',
+    waitingUsers: waitingQueue.size,
     activePairs: activePairs.size / 2,
     botSessions: botSessions.size,
-    status: 'ok',
+    aiActive: activeAI,
+    aiQueued: aiQueue.length,
     uptimeSec: Math.floor(process.uptime())
   });
 });
@@ -700,49 +649,25 @@ app.get('/api/health', (req, res) => {
 io.on('connection', socket => {
   let lastMessageAt = 0;
 
-  function clearSession() {
-    const session = botSessions.get(socket.id);
-
-    if (session?.generationTimer) {
-      clearTimeout(session.generationTimer);
-    }
-
-    if (session?.typingTimer) {
-      clearTimeout(session.typingTimer);
-    }
-
-    botSessions.delete(socket.id);
-    clearBotTimer(socket.id);
-
-    socket.emit('stranger_typing', false);
-  }
-
-  // ==========================================================
+  // ----------------------------------------------------------
   // FIND MATCH
-  // ==========================================================
+  // ----------------------------------------------------------
 
   socket.on('find_match', data => {
     const mood = data?.mood || 'any';
     const mediaMode = data?.mediaMode || 'text';
 
-    clearSession();
+    clearSession(socket);
 
     const oldPartner = activePairs.get(socket.id);
 
     if (oldPartner) {
       io.to(oldPartner).emit('partner_left');
-
       activePairs.delete(oldPartner);
       activePairs.delete(socket.id);
     }
 
-    const queueIndex = waitingQueue.findIndex(
-      user => user.id === socket.id
-    );
-
-    if (queueIndex !== -1) {
-      waitingQueue.splice(queueIndex, 1);
-    }
+    waitingQueue.delete(socket.id);
 
     const match = findMatch(
       socket.id,
@@ -752,14 +677,7 @@ io.on('connection', socket => {
 
     if (match) {
       clearBotTimer(match.id);
-
-      const matchIndex = waitingQueue.findIndex(
-        user => user.id === match.id
-      );
-
-      if (matchIndex !== -1) {
-        waitingQueue.splice(matchIndex, 1);
-      }
+      waitingQueue.delete(match.id);
 
       activePairs.set(socket.id, match.id);
       activePairs.set(match.id, socket.id);
@@ -777,30 +695,24 @@ io.on('connection', socket => {
       return;
     }
 
-    waitingQueue.push({
+    waitingQueue.set(socket.id, {
       id: socket.id,
       mood,
       mediaMode,
       joinedAt: Date.now()
     });
 
-    // AI fallback only for text mode.
-    if (mediaMode !== 'text') {
-      return;
-    }
+    // Only text mode gets AI fallback.
+    if (mediaMode !== 'text') return;
 
     const timer = setTimeout(() => {
       botTimers.delete(socket.id);
 
-      const index = waitingQueue.findIndex(
-        user => user.id === socket.id
-      );
-
-      if (index === -1) {
+      if (!waitingQueue.has(socket.id)) {
         return;
       }
 
-      waitingQueue.splice(index, 1);
+      waitingQueue.delete(socket.id);
 
       const persona = pick(PERSONAS);
 
@@ -831,7 +743,7 @@ io.on('connection', socket => {
         initiator: false
       });
 
-      // Small delay before opening.
+      // Varied opening.
       session.generationTimer = setTimeout(() => {
         if (!botSessions.has(socket.id)) return;
 
@@ -856,23 +768,23 @@ io.on('connection', socket => {
           });
 
           session.typingTimer = null;
-        }, 900 + Math.random() * 700);
+        }, 700 + Math.random() * 700);
 
       }, 700);
 
-    }, 5000);
+    }, BOT_WAIT);
 
     botTimers.set(socket.id, timer);
   });
 
-  // ==========================================================
+  // ----------------------------------------------------------
   // SEND MESSAGE
-  // ==========================================================
+  // ----------------------------------------------------------
 
   socket.on('send_message', async data => {
     const now = Date.now();
 
-    // Basic spam protection.
+    // Small per-user spam protection.
     if (now - lastMessageAt < 250) {
       return;
     }
@@ -883,7 +795,6 @@ io.on('connection', socket => {
 
     if (!text) return;
 
-    // Prevent enormous prompts.
     if (text.length > 1000) {
       text = text.slice(0, 1000);
     }
@@ -924,7 +835,7 @@ io.on('connection', socket => {
     if (info.age) session.userAge = info.age;
     if (info.gender) session.userGender = info.gender;
 
-    // Cancel previous pending timers.
+    // Cancel previous response timer.
     if (session.generationTimer) {
       clearTimeout(session.generationTimer);
       session.generationTimer = null;
@@ -957,72 +868,64 @@ io.on('connection', socket => {
 
       if (!reply && groq) {
         try {
-          const recentHistory =
-            session.history.slice(-14);
-
           const language =
             isHinglish(text)
               ? 'HINGLISH'
               : 'ENGLISH';
 
-          const response =
-            await Promise.race([
-              groq.chat.completions.create({
-                model: 'llama-3.3-70b-versatile',
+          const history =
+            session.history.slice(-14);
 
-                messages: [
-                  {
-                    role: 'system',
-                    content: `
+          const response = await runAI(() =>
+            groq.chat.completions.create({
+              model: 'llama-3.3-70b-versatile',
+
+              messages: [
+                {
+                  role: 'system',
+                  content: `
 ${SYSTEM_PROMPT}
 
-BOT PROFILE:
+BOT:
 Name: ${session.name}
 Age: 21
 City: ${session.city}
 Activity: ${session.activity}
 Interests: ${session.interests.join(', ')}
 
-USER PROFILE:
+USER:
 Name: ${session.userName || 'unknown'}
 City: ${session.userCity || 'unknown'}
 Age: ${session.userAge || 'unknown'}
 Gender: ${session.userGender || 'unknown'}
 
-CURRENT LANGUAGE:
-${language}
+LANGUAGE: ${language}
 
-FINAL RULES:
-- Reply to the latest user message.
-- Usually 3-20 words.
-- Do not force a question.
-- Do not force Hinglish.
-- Do not repeat previous replies.
-- Do not invent information.
-- Do not randomly change topic.
-- Sound like casual texting.
+Continue the conversation.
+
+Do NOT restart with hi/hello.
+
+Do NOT automatically ask ASL.
+
+Respond to the latest user message only.
 `
-                  },
-                  ...recentHistory
-                ],
+                },
+                ...history
+              ],
 
-                temperature: 0.78,
-                max_completion_tokens: 60
-              }),
-
-              new Promise((_, reject) => {
-                setTimeout(
-                  () => reject(new Error('Groq timeout')),
-                  4500
-                );
-              })
-            ]);
+              temperature: 0.78,
+              max_completion_tokens: 60
+            })
+          );
 
           reply =
             response?.choices?.[0]?.message?.content?.trim() || '';
 
         } catch (error) {
-          console.error('Groq error:', error.message);
+          console.error(
+            'Groq error:',
+            error.message
+          );
         }
       }
 
@@ -1057,17 +960,19 @@ FINAL RULES:
         content: reply
       });
 
-      // Keep memory small.
       if (session.history.length > 24) {
         session.history =
           session.history.slice(-24);
       }
 
-      // Human-like typing delay.
-      const typingTime =
-        800 +
+      // ------------------------------------------------------
+      // TYPING DELAY
+      // ------------------------------------------------------
+
+      const delay =
+        700 +
         Math.random() * 900 +
-        Math.min(reply.length * 25, 900);
+        Math.min(reply.length * 20, 800);
 
       session.typingTimer = setTimeout(() => {
         if (
@@ -1087,16 +992,16 @@ FINAL RULES:
 
         session.typingTimer = null;
 
-      }, typingTime);
+      }, delay);
 
       session.generationTimer = null;
 
-    }, 500);
+    }, 350);
   });
 
-  // ==========================================================
+  // ----------------------------------------------------------
   // WEBRTC
-  // ==========================================================
+  // ----------------------------------------------------------
 
   socket.on('webrtc_signal', data => {
     const partnerId = activePairs.get(socket.id);
@@ -1109,21 +1014,14 @@ FINAL RULES:
     }
   });
 
-  // ==========================================================
+  // ----------------------------------------------------------
   // DISCONNECT
-  // ==========================================================
+  // ----------------------------------------------------------
 
   socket.on('disconnect', () => {
-    clearSession();
+    clearSession(socket);
 
-    const index =
-      waitingQueue.findIndex(
-        user => user.id === socket.id
-      );
-
-    if (index !== -1) {
-      waitingQueue.splice(index, 1);
-    }
+    waitingQueue.delete(socket.id);
 
     const partnerId =
       activePairs.get(socket.id);
@@ -1138,14 +1036,10 @@ FINAL RULES:
 });
 
 // ============================================================
-// SERVER
+// START SERVER
 // ============================================================
 
-const PORT =
-  process.env.PORT || 5000;
-
 server.listen(PORT, () => {
-  console.log(
-    `Miloo server running on port ${PORT}`
-  );
+  console.log(`Miloo server running on port ${PORT}`);
+  console.log(`AI concurrency: ${MAX_AI_CONCURRENT}`);
 });
